@@ -1,0 +1,20 @@
+cmake_minimum_required(VERSION 3.26)
+
+set(GLOBAL PROPERTY USE_FOLDERS ON)
+
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+
+set(THIRD_PARTY_3D_MAX_SDK "${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/maxsdk" CACHE PATH "Path to 3D MAX 2024 SDK root directory")
+
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/../bin")
+
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/../bin")
+
+list(APPEND CMAKE_PREFIX_PATH "${THIRD_PARTY_3D_MAX_SDK}")
+
+project("MaxPayneKFPlugins")
+
+find_package(MaxSDK REQUIRED)
+
+add_subdirectory(MaxPayneKFMaterial)
+
