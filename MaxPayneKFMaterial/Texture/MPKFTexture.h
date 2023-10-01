@@ -10,10 +10,6 @@
 #include "MaxPayneKFMaterial.h"
 #include "MPKFTextureSampler.h"
 
-#include <mtl.h>
-#include <iparamm2.h>
-#include <iparamb2.h>
-#include <imtl.h>
 #include <texutil.h>
 #include <bitmap.h>
 #include <stdmat.h>

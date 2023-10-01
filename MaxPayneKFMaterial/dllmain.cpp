@@ -6,8 +6,10 @@
 */
 
 #include "MaxPayneKFMaterial.h"
-#include "MPKFTexture.h"
-#include "MPKFTextureDesc.h"
+#include "Texture/MPKFTexture.h"
+#include "Texture/MPKFTextureDesc.h"
+#include "Material/MPKFMaterial.h"
+#include "Material/MPKFMaterialDesc.h"
 
 HINSTANCE hInstance;
 int controlsInit = FALSE;
@@ -31,13 +33,14 @@ __declspec(dllexport) const TCHAR* LibDescription()
 
 __declspec(dllexport) int LibNumberClasses() 
 { 
-    return 1; 
+    return 2; 
 }
 
 __declspec(dllexport) ClassDesc* LibClassDesc(int i) 
 {
     switch (i) {
     case 0: return GetMPKFTextureDesc();
+    case 1: return GetMPKFMaterialDesc();
     default: return nullptr; 
     }
 }
