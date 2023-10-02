@@ -38,7 +38,7 @@ public:
 	void Get(PB2Value& v, ReferenceMaker* owner, ParamID id, int tabIndex, TimeValue t, Interval& valid) {}
 };
 
-void MPKFTexturePBAccessor::Set(PB2Value& val, ReferenceMaker* owner, ParamID id, int tabIndex, TimeValue t)    // set from v
+void MPKFTexturePBAccessor::Set(PB2Value& val, ReferenceMaker* owner, ParamID id, int tabIndex, TimeValue t)
 {
 	MPKFTexture* Texture = (MPKFTexture*)owner;
 	IParamMap2* pmap = Texture->pblock->GetMap();
@@ -306,6 +306,7 @@ MPKFTexture::MPKFTexture() :
 
 MPKFTexture::~MPKFTexture()
 {
+	DeleteAllRefs();
 	//if (TextureDlgProc) {
 	//	TextureDlgProc->DeleteThis();
 	//	TextureDlgProc = nullptr;

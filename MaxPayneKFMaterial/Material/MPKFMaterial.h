@@ -8,17 +8,33 @@
 #pragma once
 
 #include "MaxPayneKFMaterial.h"
+#include <stdmat.h>
+#include <Graphics/ITextureDisplay.h>
 
-#define MPKFMaterial_CLASS_ID		Class_ID(0x74450439, 0x62673b6c)
-#define MPKFMaterial_PBLOCK_REF		0
-#define MPKFMaterial_SUB_TEXMAPS	1
+#define MPKFMaterial_CLASS_ID					Class_ID(0x74450439, 0x62673b6c)
+#define MPKFMaterial_PBLOCK_REF					0
+#define MPKFMaterial_SUB_TEXMAPS				5
+#define MPFKMaterial_DIFFUSE_TEXMAP				0
+#define MPFKMaterial_REFLECTION_TEXMAP			1
+#define MPFKMaterial_SPECULAR_TEXMAP			2
+#define MPFKMaterial_ALPHA_BLEND_TEXMAP			3
+#define MPFKMaterial_MASK_TEXMAP				4
+#define MPFKMaterial_DIFFUSE_TEXMAP_REF			1
+#define MPFKMaterial_REFLECTION_TEXMAP_REF		2
+#define MPFKMaterial_SPECULAR_TEXMAP_REF		3
+#define MPFKMaterial_ALPHA_BLEND_TEXMAP_REF		4
+#define MPFKMaterial_MASK_TEXMAP_REF			5
 
-class MPKFMaterial : public Mtl
+class MPKFMaterial : public Mtl, public MaxSDK::Graphics::ITextureDisplay
 {
 public:
+	friend class MPKFMaterialPBAccessor;
+
 	MPKFMaterial();
 
 	MPKFMaterial(BOOL loading);
+
+	BaseInterface* GetInterface(Interface_ID id) override;
 
 	virtual ~MPKFMaterial();
 
@@ -32,19 +48,36 @@ public:
 
 	void Reset() override;
 
+	//From ITextureDisplay
+	void SetupTextures(TimeValue t, MaxSDK::Graphics::DisplayTextureHelper& updater) override;
+
+	BOOL SupportTexDisplay() override { return TRUE; }
+
+	void ActivateTexDisplay(BOOL onoff) override;
+
+	void DiscardTexHandles();
+
+	BOOL SupportsMultiMapsInViewport() override { return TRUE; }
+
+	int MapSlotType(int i) override { return MAPSLOT_TEXTURE; }
+
 	// Base
 	Class_ID ClassID() override { return MPKFMaterial_CLASS_ID; }
 
 	SClass_ID SuperClassID() override { return MATERIAL_CLASS_ID; }
 
-	virtual void GetClassName(TSTR& s, bool localized = true) const override { UNUSED_PARAM(localized); s = TSTR(_M("MKFMaterial")); }
+	void GetClassName(TSTR& s, bool localized = true) const override { UNUSED_PARAM(localized); s = TSTR(_M("MKFMaterial")); }
 
 	RefTargetHandle Clone(RemapDir& remap) override;
+
+	ULONG LocalRequirements(int subMtlNum) override;
+
+	void LocalMappingsRequired(int subMtlNum, BitArray& mapreq, BitArray& bumpreq) override;
 
 	// Refs
 	RefResult NotifyRefChanged(const Interval& changeInt, RefTargetHandle hTarget, PartID& partID, RefMessage message, BOOL propagate) override;
 
-	int NumRefs() override { return 1; }
+	int NumRefs() override { return 6; }
 
 	RefTargetHandle GetReference(int i) override;
 
@@ -57,23 +90,23 @@ public:
 	void DeleteThis() override { delete this; }
 
 	//Color
-	Color GetAmbient(int mtlNum = 0, BOOL backFace = FALSE) override { return AColor(0.f, 0.f, 0.f, 0.f); }
+	Color GetAmbient(int mtlNum = 0, BOOL backFace = FALSE) override;
 
-	Color GetDiffuse(int mtlNum = 0, BOOL backFace = FALSE) override { return AColor(0.f, 0.f, 0.f, 0.f); }
+	Color GetDiffuse(int mtlNum = 0, BOOL backFace = FALSE) override;
 
-	Color GetSpecular(int mtlNum = 0, BOOL backFace = FALSE) override { return AColor(0.f, 0.f, 0.f, 0.f); }
+	Color GetSpecular(int mtlNum = 0, BOOL backFace = FALSE) override;
 
 	float GetShininess(int mtlNum = 0, BOOL backFace = FALSE) override { return 0.f; }
 	
-	float GetShinStr(int mtlNum = 0, BOOL backFace = FALSE) override { return 0.f; }
+	float GetShinStr(int mtlNum = 0, BOOL backFace = FALSE) override { return 1.f; }
 
-	float GetXParency(int mtlNum = 0, BOOL backFace = FALSE) override { return 0.f; }
+	float GetXParency(int mtlNum = 0, BOOL backFace = FALSE) override;
 
-	void SetAmbient(Color c, TimeValue t) override {}
+	void SetAmbient(Color c, TimeValue t) override;
 
-	void SetDiffuse(Color c, TimeValue t) override {}
+	void SetDiffuse(Color c, TimeValue t) override;
 
-	void SetSpecular(Color c, TimeValue t) override {}
+	void SetSpecular(Color c, TimeValue t) override;
 
 	void SetShininess(float v, TimeValue t) override {}
 
@@ -82,13 +115,22 @@ public:
 	// SubTexmaps
 	int NumSubTexmaps() override { return MPKFMaterial_SUB_TEXMAPS; }
 
-	Texmap* GetSubTexmap(int i) override { return SubTexmaps[i]; }
+	Texmap* GetSubTexmap(int i) override;
 
-	void SetSubTexmap(int i, Texmap* m) override { SubTexmaps[i] = m; }
+	void SetSubTexmap(int i, Texmap* m) override;
 
 	TSTR GetSubTexmapSlotName(int i, bool localized) override;
 
-	virtual TSTR GetSubTexmapTVName(int i, bool localized);
+	int SubTexmapOn(int i) override;
+
+	// Sub Anim
+	int	NumSubs() override { return 6; }
+
+	Animatable* SubAnim(int i) override;
+
+	TSTR SubAnimName(int i, bool localized) override;
+
+	int	SubNumToRefNum(int subNum) override { return subNum; }
 
 	// SubMaterials
 	int NumSubMtls() override { return 0; }
@@ -97,16 +139,12 @@ public:
 
 	void SetSubMtl(int i, Mtl* m) override { }
 
-	TSTR GetSubMtlSlotName(int i, bool localized) override { return TSTR(_T("Diffuse")); }
-
-	//TSTR GetSubMtlTVName(int i, bool localized = true) override {}
-
-	//void CopySubMtl(HWND hwnd, int ifrom, int ito) override {}
+	TSTR GetSubMtlSlotName(int i, bool localized) override { return TSTR(_T("")); }
 
 	// Shade
 	float EvalDisplacement(ShadeContext& sc) override { return 0.0f; }
 
-	Interval DisplacementValidity(TimeValue t) override { return FOREVER; }
+	Interval DisplacementValidity(TimeValue t) override;
 
 	void Shade(ShadeContext& sc) override;
 
@@ -119,9 +157,65 @@ protected:
 	void SetReference(int i, RefTargetHandle rtarg) override;
 
 private:
+	TexHandle* ViewportDiffuseTexHandle;
+
+	TexHandle* ViewportOpacityTexHandle;
+
+	Interval ViewportValidInterval;
+
 	IParamBlock2* pblock;
 
 	Interval ivalid;
 
 	Texmap* SubTexmaps[MPKFMaterial_SUB_TEXMAPS];
+
+	Color AmbientColor;
+
+	Color DiffuseColor;
+
+	Color SpecularColor;
+
+	int VertexAlphaValue;
+
+	float SpecularExponent;
+
+	BOOL HasVertexAlpha;
+
+	BOOL TwoSided;
+
+	BOOL Fogging;
+
+	BOOL InvisibleGeometry;
+
+	int DiffuseColorShadingType;
+
+	int SpecularColorShadigType;
+
+	int AlphaReferenceValue;
+
+	int DiffuseShadingType;
+
+	int ReflectionShadingType;
+
+	int ReflectionLitShadingType;
+	
+	int MaskShadingType;
+
+	BOOL HasDiffuseTexture;
+
+	BOOL HasAlphaCompare;
+
+	BOOL HasEdgeBlend;
+
+	BOOL HasAlphaBlendTexture;
+
+	BOOL HasReflectionTexture;
+
+	BOOL HasLit;
+
+	BOOL HasSpecularTexture;
+
+	BOOL HasMaskTexture;
+
+	static class MPKFMaterialBasicDlgProc* BasicDlgProc;
 };

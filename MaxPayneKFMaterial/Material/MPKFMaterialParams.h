@@ -47,7 +47,7 @@ ParamBlockDesc2* GetMPKFMaterialParamBlock();
 class MPKFMaterialTexturingDlgProc : public ParamMap2UserDlgProc
 {
 public:
-	MPKFMaterialTexturingDlgProc(MPKFMaterial* InMaterial, IMtlParams* InIp);
+	MPKFMaterialTexturingDlgProc(class MPKFMaterial* InMaterial, IMtlParams* InIp);
 
 	virtual ~MPKFMaterialTexturingDlgProc();
 
@@ -66,7 +66,33 @@ public:
 	//virtual void SetParamBlock(IParamBlock2* pb) { }
 private:
 	HWND Handle;
-	class MPKFMaterial* Material;
+	MPKFMaterial* Material;
 	IMtlParams* Ip;
-	//IParamBlock2* Pblock;
+};
+
+class MPKFMaterialBasicDlgProc : public ParamMap2UserDlgProc
+{
+public:
+	MPKFMaterialBasicDlgProc(class MPKFMaterial* InMaterial, IMtlParams* InIp);
+
+	virtual ~MPKFMaterialBasicDlgProc();
+
+	void UpdateMtl();
+
+	virtual INT_PTR DlgProc(TimeValue t, IParamMap2* map, HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) override;
+
+	void DeleteThis() override { delete this; }
+
+	//virtual void SetThing(ReferenceTarget* m) { }
+
+	//virtual void Update(TimeValue t) { }
+
+	//virtual void SetParamBlock(IParamBlock2* pb) { }
+private:
+	HWND Handle;
+	MPKFMaterial* Material;
+	IMtlParams* Ip;
+
+	//IColorSwatch* SpecularColor;
+	//IColorSwatch* DiffuseColor;
 };

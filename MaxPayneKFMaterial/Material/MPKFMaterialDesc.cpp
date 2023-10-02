@@ -10,12 +10,9 @@
 #include <IMaterialBrowserEntryInfo.h>
 #include <IMtlRender_Compatibility.h>
 
-class MPKFMaterialClassDesc : public ClassDesc2, public IMtlRender_Compatibility_MtlBase
+class MPKFMaterialClassDesc : public ClassDesc2 //, public IMaterialBrowserEntryInfo
 {
 public:
-	MPKFMaterialClassDesc() {
-		IMtlRender_Compatibility_MtlBase::Init(*this);
-	}
 
 	int IsPublic() override { return TRUE; }
 	void* Create(BOOL loading = FALSE) override { return new MPKFMaterial(loading); }
@@ -28,7 +25,18 @@ public:
 	HINSTANCE     HInstance() override { return hInstance; }
 
 	
-	bool IsCompatibleWithRenderer(ClassDesc& rendererClassDesc) override { return true; }
+	//bool IsCompatibleWithRenderer(ClassDesc& rendererClassDesc) override { return true; }
+
+	//FPInterface* GetInterface(Interface_ID id) {
+	//	if (IMATERIAL_BROWSER_ENTRY_INFO_INTERFACE == id) {
+	//		return static_cast<IMaterialBrowserEntryInfo*>(this);
+	//	}
+	//	return ClassDesc2::GetInterface(id);
+	//}
+
+	//const MCHAR* GetEntryName() const { return nullptr; }
+	//const MCHAR* GetEntryCategory() const { return _T("Materials\\Max Payne"); }
+	//Bitmap* GetEntryThumbnail() const { return nullptr; }
 };
 
 
