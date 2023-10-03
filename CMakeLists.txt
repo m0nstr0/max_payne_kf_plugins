@@ -16,5 +16,10 @@ project("MaxPayneKFPlugins")
 
 find_package(MaxSDK REQUIRED)
 
+add_subdirectory(MaxPayneCore)
+
 add_subdirectory(MaxPayneKFMaterial)
 
+add_subdirectory(MaxPayneKFExporter)
+
+add_subdirectory(MaxPayneKFImporter)
