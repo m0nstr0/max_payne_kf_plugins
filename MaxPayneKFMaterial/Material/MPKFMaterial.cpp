@@ -1,27 +1,88 @@
 #include "MPKFMaterial.h"
 #include "MPKFMaterialDesc.h"
 #include "MPKFMaterialParams.h"
-//#include <ihardwarematerial.h>
 
 #define BMIDATA(x)    ((UBYTE *)((BYTE *)(x) + sizeof(BITMAPINFOHEADER)))
 
-MPKFMaterialBasicDlgProc* MPKFMaterial::BasicDlgProc;
+MPKFMaterialTexturingDlgProc* MPKFMaterial::TexturingDlgProc;
 
-MPKFMaterial::MPKFMaterial():
+MPKFMaterial::MPKFMaterial() :
 	ViewportDiffuseTexHandle{ nullptr },
 	ViewportOpacityTexHandle{ nullptr },
-	pblock{ nullptr }
+	pblock{ nullptr },
+	AmbientColor(0.f, 0.f, 0.f),
+	DiffuseColor(1.f, 0.f, 0.f),
+	SpecularColor(1.f, 1.f, 1.f),
+	VertexAlphaValue{ 100 },
+	SpecularExponent{ 8.f },
+	HasVertexAlpha{ FALSE },
+	TwoSided{ FALSE },
+	Fogging{ FALSE },
+	InvisibleGeometry{ FALSE },
+	DiffuseColorShadingType{ MPFKMaterial_DIFFUSE_COLOR_TYPE_GOURAND },
+	SpecularColorShadigType{ MPFKMaterial_SPECULAR_COLOR_TYPE_GOURAND },
+	AlphaReferenceValue{ 240 },
+	DiffuseShadingType{ MPFKMaterial_DIFFUSE_TEXMAP_TYPE_COPY },
+	ReflectionShadingType{ MPFKMaterial_REFLECTION_TEXMAP_TYPE_COPY },
+	ReflectionLitShadingType {MPFKMaterial_LIT_TYPE_PHONG},
+	MaskShadingType{ MPFKMaterial_MASK_TEXMAP_TYPE_UVW1 },
+	HasDiffuseTexture{ FALSE },
+	HasAlphaCompare{ FALSE },
+	HasEdgeBlend{ FALSE },
+	HasAlphaBlendTexture{ FALSE },
+	HasReflectionTexture{ FALSE },
+	HasLit{ FALSE },
+	HasBumpTexture{ FALSE },
+	HasMaskTexture{ FALSE },
+	CurrentGame{ MPFKMaterial_GAME_IS_MP1 },
+	EmbossFactor{ 50.f },
+	ModelingUnshded{ FALSE },
+	ModelingWireframe{ FALSE },
+	HasModelingTransparency{ FALSE },
+	ModelingTransparencyValue{ 100 }
 {
 	for (int i = 0; i < MPKFMaterial_SUB_TEXMAPS; i++)
 		SubTexmaps[i] = nullptr;
 
 	Reset();
+
+	ViewportValidInterval.SetEmpty();
 }
 
 MPKFMaterial::MPKFMaterial(BOOL loading):
 	ViewportDiffuseTexHandle{ nullptr },
 	ViewportOpacityTexHandle{ nullptr },
-	pblock { nullptr }
+	pblock{ nullptr },
+	AmbientColor(0.f, 0.f, 0.f),
+	DiffuseColor(1.f, 0.f, 0.f),
+	SpecularColor(1.f, 1.f, 1.f),
+	VertexAlphaValue{ 100 },
+	SpecularExponent{ 8.f },
+	HasVertexAlpha{ FALSE },
+	TwoSided{ FALSE },
+	Fogging{ FALSE },
+	InvisibleGeometry{ FALSE },
+	DiffuseColorShadingType{ MPFKMaterial_DIFFUSE_COLOR_TYPE_GOURAND },
+	SpecularColorShadigType{ MPFKMaterial_SPECULAR_COLOR_TYPE_GOURAND },
+	AlphaReferenceValue{ 240 },
+	DiffuseShadingType{ MPFKMaterial_DIFFUSE_TEXMAP_TYPE_COPY },
+	ReflectionShadingType{ MPFKMaterial_REFLECTION_TEXMAP_TYPE_COPY },
+	ReflectionLitShadingType{ MPFKMaterial_LIT_TYPE_PHONG },
+	MaskShadingType{ MPFKMaterial_MASK_TEXMAP_TYPE_UVW1 },
+	HasDiffuseTexture{ FALSE },
+	HasAlphaCompare{ FALSE },
+	HasEdgeBlend{ FALSE },
+	HasAlphaBlendTexture{ FALSE },
+	HasReflectionTexture{ FALSE },
+	HasLit{ FALSE },
+	HasBumpTexture{ FALSE },
+	HasMaskTexture{ FALSE },
+	CurrentGame{ MPFKMaterial_GAME_IS_MP1 },
+	EmbossFactor{ 50.f },
+	ModelingUnshded{ FALSE },
+	ModelingWireframe{ FALSE },
+	HasModelingTransparency{ FALSE },
+	ModelingTransparencyValue{ 100 }
 {
 	for (int i = 0; i < MPKFMaterial_SUB_TEXMAPS; i++)
 		SubTexmaps[i] = nullptr;
@@ -51,7 +112,9 @@ ParamDlg* MPKFMaterial::CreateParamDlg(HWND hwMtlEdit, IMtlParams* imp)
 {
 	IAutoMParamDlg* mainDlg = GetMPKFMaterialDesc()->CreateParamDlgs(hwMtlEdit, imp, this);
 
-	BasicDlgProc = new MPKFMaterialBasicDlgProc(this, imp);
+	TexturingDlgProc = new MPKFMaterialTexturingDlgProc(this, imp);
+
+	GetMPKFMaterialParamBlock()->SetUserDlgProc(mpkfmaterial_params_textures_rollout, TexturingDlgProc);
 
 	return mainDlg;
 }
@@ -100,8 +163,14 @@ void MPKFMaterial::Update(TimeValue t, Interval& valid)
 		pblock->GetValue(mpkfmaterial_params_has_alpha_blend, t, HasAlphaBlendTexture, ivalid);
 		pblock->GetValue(mpkfmaterial_params_has_reflection, t, HasReflectionTexture, ivalid);
 		pblock->GetValue(mpkfmaterial_params_has_lit, t, HasLit, ivalid);
-		pblock->GetValue(mpkfmaterial_params_has_specular, t, HasSpecularTexture, ivalid);
+		pblock->GetValue(mpkfmaterial_params_has_bump, t, HasBumpTexture, ivalid);
 		pblock->GetValue(mpkfmaterial_params_has_mask, t, HasMaskTexture, ivalid);
+		pblock->GetValue(mpkfmaterial_params_game, t, CurrentGame, ivalid);
+		pblock->GetValue(mpkfmaterial_params_emboss_factor, t, EmbossFactor, ivalid);
+		pblock->GetValue(mpkfmaterial_params_modeling_unshaded, t, ModelingUnshded, ivalid);
+		pblock->GetValue(mpkfmaterial_params_modeling_wireframe, t, ModelingWireframe, ivalid);
+		pblock->GetValue(mpkfmaterial_params_modeling_transparency, t, HasModelingTransparency, ivalid);
+		pblock->GetValue(mpkfmaterial_params_modeling_transparency_value, t, ModelingTransparencyValue, ivalid);
 	}
 
 	valid &= ivalid;
@@ -135,6 +204,37 @@ void MPKFMaterial::Reset()
 
 	DeleteReference(MPKFMaterial_PBLOCK_REF);
 
+	AmbientColor = Color(0.f, 0.f, 0.f);
+	DiffuseColor = Color(1.f, 0.f, 0.f);
+	SpecularColor = Color(1.f, 1.f, 1.f);
+	VertexAlphaValue = 100;
+	SpecularExponent = 8.f;
+	HasVertexAlpha = FALSE;
+	TwoSided = FALSE;
+	Fogging = FALSE;
+	InvisibleGeometry = FALSE;
+	DiffuseColorShadingType = MPFKMaterial_DIFFUSE_COLOR_TYPE_GOURAND;
+	SpecularColorShadigType = MPFKMaterial_SPECULAR_COLOR_TYPE_GOURAND;
+	AlphaReferenceValue = 240;
+	DiffuseShadingType = MPFKMaterial_DIFFUSE_TEXMAP_TYPE_COPY;
+	ReflectionShadingType = MPFKMaterial_REFLECTION_TEXMAP_TYPE_COPY;
+	ReflectionLitShadingType = MPFKMaterial_LIT_TYPE_PHONG;
+	MaskShadingType = MPFKMaterial_MASK_TEXMAP_TYPE_UVW1;
+	HasDiffuseTexture = FALSE;
+	HasAlphaCompare = FALSE;
+	HasEdgeBlend = FALSE;
+	HasAlphaBlendTexture = FALSE;
+	HasReflectionTexture = FALSE;
+	HasLit = FALSE;
+	HasBumpTexture = FALSE;
+	HasMaskTexture = FALSE;
+	CurrentGame = MPFKMaterial_GAME_IS_MP1;
+	EmbossFactor = 50.f;
+	ModelingUnshded = FALSE;
+	ModelingWireframe = FALSE;
+	HasModelingTransparency = FALSE;
+	ModelingTransparencyValue = 100;
+
 	GetMPKFMaterialDesc()->MakeAutoParamBlocks(this);
 }
 
@@ -146,11 +246,10 @@ void MPKFMaterial::SetupTextures(TimeValue t, MaxSDK::Graphics::DisplayTextureHe
 		return;
 	}
 
-	if (SubTexmaps[MPFKMaterial_DIFFUSE_TEXMAP]) {
+	if (SubTexmaps[MPFKMaterial_DIFFUSE_TEXMAP] && HasDiffuseTexture) {
 		updater.UpdateTextureMapInfo(t, MaxSDK::Graphics::ISimpleMaterial::MapUsage::UsageDiffuse, SubTexmaps[MPFKMaterial_DIFFUSE_TEXMAP]);
 	}
 
-	// if the texHandler is valid, use the cached data and return.
 	if (!ViewportValidInterval.InInterval(t))
 	{
 		DiscardTexHandles();
@@ -158,7 +257,7 @@ void MPKFMaterial::SetupTextures(TimeValue t, MaxSDK::Graphics::DisplayTextureHe
 		ViewportValidInterval.SetInfinite();
 
 		BITMAPINFO* bmi = nullptr;
-		if (SubTexmaps[MPFKMaterial_DIFFUSE_TEXMAP]) {
+		if (SubTexmaps[MPFKMaterial_DIFFUSE_TEXMAP] && HasDiffuseTexture) {
 			Interval validInterval;
 			bmi = SubTexmaps[MPFKMaterial_DIFFUSE_TEXMAP]->GetVPDisplayDIB(t, updater, validInterval, FALSE);
 			ViewportValidInterval = ViewportValidInterval & validInterval;
@@ -170,12 +269,12 @@ void MPKFMaterial::SetupTextures(TimeValue t, MaxSDK::Graphics::DisplayTextureHe
 	}
 
 	pISimpleMtl->ClearTextures();
-	if (ViewportDiffuseTexHandle)
+	if (ViewportDiffuseTexHandle && ModelingUnshded == FALSE && HasDiffuseTexture)
 	{
 		pISimpleMtl->SetTexture(ViewportDiffuseTexHandle, MaxSDK::Graphics::ISimpleMaterial::UsageDiffuse);
 	}
 
-	Color diffuseColor = DiffuseColor;// GetDiffuse();
+	Color diffuseColor = DiffuseColor;
 	AColor diffuseBorderColor(int(255 * diffuseColor.r + 0.5), int(255 * diffuseColor.g + 0.5), int(255 * diffuseColor.b + 0.5), 0);
 	pISimpleMtl->SetBorderColor(MaxSDK::Graphics::ISimpleMaterial::UsageDiffuse, diffuseBorderColor);
 	pISimpleMtl->SetAmbientColor(GetAmbient());
@@ -204,11 +303,48 @@ RefTargetHandle MPKFMaterial::Clone(RemapDir& remap)
 {
 	MPKFMaterial* mnew = new MPKFMaterial(FALSE);
 	*((MtlBase*)mnew) = *((MtlBase*)this);
-	// First clone the parameter block
+	
 	mnew->ReplaceReference(MPKFMaterial_PBLOCK_REF, remap.CloneRef(pblock));
-
-	// Next clone the sub-materials
+	
 	mnew->ivalid.SetEmpty();
+	mnew->DiscardTexHandles();
+
+	for (int i = 0; i < MPKFMaterial_SUB_TEXMAPS; i++) {
+		mnew->SubTexmaps[i] = nullptr;
+		mnew->ReplaceReference(i + 1, remap.CloneRef(SubTexmaps[i]));
+	}
+
+	mnew->AmbientColor = AmbientColor;
+	mnew->DiffuseColor = DiffuseColor;
+	mnew->SpecularColor = SpecularColor;
+	mnew->VertexAlphaValue = VertexAlphaValue;
+	mnew->SpecularExponent = SpecularExponent;
+	mnew->HasVertexAlpha = HasVertexAlpha;
+	mnew->TwoSided = TwoSided;
+	mnew->Fogging = Fogging;
+	mnew->InvisibleGeometry = InvisibleGeometry;
+	mnew->DiffuseColorShadingType = DiffuseColorShadingType;
+	mnew->SpecularColorShadigType = SpecularColorShadigType;
+	mnew->AlphaReferenceValue = AlphaReferenceValue;
+	mnew->DiffuseShadingType = DiffuseShadingType;
+	mnew->ReflectionShadingType = ReflectionShadingType;
+	mnew->ReflectionLitShadingType = ReflectionLitShadingType;
+	mnew->MaskShadingType = MaskShadingType;
+	mnew->HasDiffuseTexture = HasDiffuseTexture;
+	mnew->HasAlphaCompare = HasAlphaCompare;
+	mnew->HasEdgeBlend = HasEdgeBlend;
+	mnew->HasAlphaBlendTexture = HasAlphaBlendTexture;
+	mnew->HasReflectionTexture = HasReflectionTexture;
+	mnew->HasLit = HasLit;
+	mnew->HasBumpTexture = HasBumpTexture;
+	mnew->HasMaskTexture = HasMaskTexture;
+	mnew->CurrentGame = CurrentGame;
+	mnew->EmbossFactor = EmbossFactor;
+	mnew->ModelingUnshded = ModelingUnshded;
+	mnew->ModelingWireframe = ModelingWireframe;
+	mnew->HasModelingTransparency = HasModelingTransparency;
+	mnew->ModelingTransparencyValue = ModelingTransparencyValue;
+
 	BaseClone(this, mnew, remap);
 	return (RefTargetHandle)mnew;
 }
@@ -224,13 +360,18 @@ ULONG MPKFMaterial::LocalRequirements(int subMtlNum)
 
 	retval |= MTLREQ_UV;
 	retval |= MTLREQ_TRANSP;
+	//retval |= MTLREQ_UV2;
 
 	if (TwoSided) {
 		retval |= MTLREQ_2SIDE;
 	}
 
-	//retval |= MTLREQ_2SIDE; //MTLREQ_WIRE
-	//retval |= MTLREQ_TRANSP; //MTLREQ_2SIDE; MTLREQ_TRANSP; MTLREQ_UV;  MTLREQ_AUTOREFLECT; MTLREQ_ADDITIVE_TRANSP; MTLREQ_UV2; 
+	if (ModelingWireframe) {
+		retval |= MTLREQ_WIRE;
+	}
+
+	//retval |= MTLREQ_AUTOREFLECT; MTLREQ_ADDITIVE_TRANSP;
+
 	return retval;
 }
 
@@ -323,12 +464,16 @@ Color MPKFMaterial::GetSpecular(int mtlNum, BOOL backFace)
 float MPKFMaterial::GetXParency(int mtlNum, BOOL backFace) 
 { 
 	BOOL HasAlpha;
+	BOOL HasAlphaModeling;
 	BOOL IsInvisible;
 	int RefValue;
+	int RefValueModeling;
 
 	pblock->GetValue(mpkfmaterial_params_vertex_alpha_value, 0, RefValue);
 	pblock->GetValue(mpkfmaterial_params_vertex_alpha, 0, HasAlpha);
 	pblock->GetValue(mpkfmaterial_params_invisible_geometry, 0, IsInvisible);
+	pblock->GetValue(mpkfmaterial_params_modeling_transparency, 0, HasAlphaModeling);
+	pblock->GetValue(mpkfmaterial_params_modeling_transparency_value, 0, RefValueModeling);
 
 	if (IsInvisible) {
 		return 1.0f;
@@ -338,27 +483,18 @@ float MPKFMaterial::GetXParency(int mtlNum, BOOL backFace)
 		return 1.0f - (float)RefValue / 100.f;
 	}
 
+	if (HasAlphaModeling) {
+		return 1.0f - (float)RefValueModeling / 100.f;
+	}
+
 	return 0.f;
 }
 
-void MPKFMaterial::SetAmbient(Color c, TimeValue t) 
-{
-	//pblock->GetValue(mpkfmaterial_params_color_ambient, t, c);
-	//AmbientColor = c;
-}
+void MPKFMaterial::SetAmbient(Color c, TimeValue t) {}
 
-void MPKFMaterial::SetDiffuse(Color c, TimeValue t) 
-{
-	//pblock->GetValue(mpkfmaterial_params_color_diffuse, t, c);
-	//GetMPKFMaterialParamBlock()->InvalidateUI(mpkfmaterial_params_color_diffuse);
-	//DiffuseColor = c;
-}
+void MPKFMaterial::SetDiffuse(Color c, TimeValue t) {}
 
-void MPKFMaterial::SetSpecular(Color c, TimeValue t) 
-{
-	//pblock->GetValue(mpkfmaterial_params_color_specular, t, c);
-	//SpecularColor = c;
-}
+void MPKFMaterial::SetSpecular(Color c, TimeValue t) {}
 
 Texmap* MPKFMaterial::GetSubTexmap(int i) 
 { 
@@ -374,6 +510,7 @@ void MPKFMaterial::SetSubTexmap(int i, Texmap* m)
 	case MPFKMaterial_DIFFUSE_TEXMAP: {
 		GetMPKFMaterialParamBlock()->InvalidateUI(mpkfmaterial_params_diffuse);
 		ivalid.SetEmpty();
+		DiscardTexHandles();
 		return;
 	}
 	case MPFKMaterial_REFLECTION_TEXMAP: {
@@ -381,13 +518,13 @@ void MPKFMaterial::SetSubTexmap(int i, Texmap* m)
 		ivalid.SetEmpty();
 		return;
 	}
-	case MPFKMaterial_SPECULAR_TEXMAP: {
+	case MPFKMaterial_BUMP_TEXMAP: {
 		GetMPKFMaterialParamBlock()->InvalidateUI(mpkfmaterial_params_reflection);
 		ivalid.SetEmpty();
 		return;
 	}
 	case MPFKMaterial_ALPHA_BLEND_TEXMAP: {
-		GetMPKFMaterialParamBlock()->InvalidateUI(mpkfmaterial_params_specular);
+		GetMPKFMaterialParamBlock()->InvalidateUI(mpkfmaterial_params_bump);
 		ivalid.SetEmpty();
 		return;
 	}
@@ -405,7 +542,7 @@ TSTR MPKFMaterial::GetSubTexmapSlotName(int i, bool localized)
 	{
 	case MPFKMaterial_DIFFUSE_TEXMAP: return _T("Diffuse");
 	case MPFKMaterial_REFLECTION_TEXMAP: return _T("Reflection");
-	case MPFKMaterial_SPECULAR_TEXMAP: return _T("Specular");
+	case MPFKMaterial_BUMP_TEXMAP: return _T("Specular");
 	case MPFKMaterial_ALPHA_BLEND_TEXMAP: return _T("AlphaBlend");
 	case MPFKMaterial_MASK_TEXMAP: return _T("Mask");
 	default: return TSTR(_T(""));
@@ -510,8 +647,8 @@ void MPKFMaterial::Shade(ShadeContext& sc)
 		DColor = SubTexmaps[MPFKMaterial_DIFFUSE_TEXMAP]->EvalColor(sc);
 	}
 
-	if (HasSpecularTexture && SubTexmaps[MPFKMaterial_SPECULAR_TEXMAP]) {
-		SColor = SubTexmaps[MPFKMaterial_SPECULAR_TEXMAP]->EvalColor(sc);
+	if (HasBumpTexture && SubTexmaps[MPFKMaterial_BUMP_TEXMAP]) {
+		SColor = SubTexmaps[MPFKMaterial_BUMP_TEXMAP]->EvalColor(sc);
 	}
 
 	if (HasAlphaBlendTexture && SubTexmaps[MPFKMaterial_ALPHA_BLEND_TEXMAP]) {
@@ -538,14 +675,119 @@ void MPKFMaterial::Shade(ShadeContext& sc)
 	sc.out.c = AColor(1.f, 0.f, 0.f);//DColor;
 }
 
+#define MTL_MATERIAL_HDR_CHUNK		0x4000
+#define MTL_MATERIAL_PARAM_CHUNK	0x0001
+
 IOResult MPKFMaterial::Load(ILoad* iload)
 {
-	return IOResult();
+	ULONG Nb;
+	IOResult res;
+
+	while (IO_OK == (res = iload->OpenChunk())) {
+		switch (iload->CurChunkID()) {
+		case MTL_MATERIAL_HDR_CHUNK: {
+			res = MtlBase::Load(iload);
+			ivalid.SetEmpty();
+			break;
+		}
+		case MTL_MATERIAL_PARAM_CHUNK: {
+			res = iload->Read(&ModelingTransparencyValue, sizeof(ModelingTransparencyValue), &Nb);
+			res = iload->Read(&HasModelingTransparency, sizeof(HasModelingTransparency), &Nb);
+			res = iload->Read(&ModelingWireframe, sizeof(ModelingWireframe), &Nb);
+			res = iload->Read(&ModelingUnshded, sizeof(ModelingUnshded), &Nb);
+			res = iload->Read(&EmbossFactor, sizeof(EmbossFactor), &Nb);
+			res = iload->Read(&CurrentGame, sizeof(CurrentGame), &Nb);
+			res = iload->Read(&HasMaskTexture, sizeof(HasMaskTexture), &Nb);
+			res = iload->Read(&HasBumpTexture, sizeof(HasBumpTexture), &Nb);
+			res = iload->Read(&HasLit, sizeof(HasLit), &Nb);
+			res = iload->Read(&HasReflectionTexture, sizeof(HasReflectionTexture), &Nb);
+			res = iload->Read(&HasAlphaBlendTexture, sizeof(HasAlphaBlendTexture), &Nb);
+			res = iload->Read(&HasEdgeBlend, sizeof(HasEdgeBlend), &Nb);
+			res = iload->Read(&HasAlphaCompare, sizeof(HasAlphaCompare), &Nb);
+			res = iload->Read(&HasDiffuseTexture, sizeof(HasDiffuseTexture), &Nb);
+			res = iload->Read(&MaskShadingType, sizeof(MaskShadingType), &Nb);
+			res = iload->Read(&ReflectionLitShadingType, sizeof(ReflectionLitShadingType), &Nb);
+			res = iload->Read(&ReflectionShadingType, sizeof(ReflectionShadingType), &Nb);
+			res = iload->Read(&DiffuseShadingType, sizeof(DiffuseShadingType), &Nb);
+			res = iload->Read(&AlphaReferenceValue, sizeof(AlphaReferenceValue), &Nb);
+			res = iload->Read(&SpecularColorShadigType, sizeof(SpecularColorShadigType), &Nb);
+			res = iload->Read(&DiffuseColorShadingType, sizeof(DiffuseColorShadingType), &Nb);
+			res = iload->Read(&InvisibleGeometry, sizeof(InvisibleGeometry), &Nb);
+			res = iload->Read(&Fogging, sizeof(Fogging), &Nb);
+			res = iload->Read(&TwoSided, sizeof(TwoSided), &Nb);
+			res = iload->Read(&HasVertexAlpha, sizeof(HasVertexAlpha), &Nb);
+			res = iload->Read(&SpecularExponent, sizeof(SpecularExponent), &Nb);
+			res = iload->Read(&VertexAlphaValue, sizeof(VertexAlphaValue), &Nb);
+			res = iload->Read(&SpecularColor.r, sizeof(SpecularColor.r), &Nb);
+			res = iload->Read(&SpecularColor.g, sizeof(SpecularColor.g), &Nb);
+			res = iload->Read(&SpecularColor.b, sizeof(SpecularColor.b), &Nb);
+			res = iload->Read(&DiffuseColor.r, sizeof(DiffuseColor.r), &Nb);
+			res = iload->Read(&DiffuseColor.g, sizeof(DiffuseColor.g), &Nb);
+			res = iload->Read(&DiffuseColor.b, sizeof(DiffuseColor.b), &Nb);
+			res = iload->Read(&AmbientColor.r, sizeof(AmbientColor.r), &Nb);
+			res = iload->Read(&AmbientColor.g, sizeof(AmbientColor.g), &Nb);
+			res = iload->Read(&AmbientColor.b, sizeof(AmbientColor.b), &Nb);
+			break;
+		}
+		}
+
+		iload->CloseChunk();
+		if (res != IO_OK)
+			return res;
+	}
+
+	return IO_OK;
 }
 
 IOResult MPKFMaterial::Save(ISave* isave)
 {
-	return IOResult();
+	ULONG Nb;
+	IOResult res;
+	isave->BeginChunk(MTL_MATERIAL_HDR_CHUNK);
+	res = MtlBase::Save(isave);
+	if (res != IO_OK) return res;
+	isave->EndChunk();
+
+	isave->BeginChunk(MTL_MATERIAL_PARAM_CHUNK);
+	isave->Write(&ModelingTransparencyValue, sizeof(ModelingTransparencyValue), &Nb);
+	isave->Write(&HasModelingTransparency, sizeof(HasModelingTransparency), &Nb);
+	isave->Write(&ModelingWireframe, sizeof(ModelingWireframe), &Nb);
+	isave->Write(&ModelingUnshded, sizeof(ModelingUnshded), &Nb);
+	isave->Write(&EmbossFactor, sizeof(EmbossFactor), &Nb);
+	isave->Write(&CurrentGame, sizeof(CurrentGame), &Nb);
+	isave->Write(&HasMaskTexture, sizeof(HasMaskTexture), &Nb);
+	isave->Write(&HasBumpTexture, sizeof(HasBumpTexture), &Nb);
+	isave->Write(&HasLit, sizeof(HasLit), &Nb);
+	isave->Write(&HasReflectionTexture, sizeof(HasReflectionTexture), &Nb);
+	isave->Write(&HasAlphaBlendTexture, sizeof(HasAlphaBlendTexture), &Nb);
+	isave->Write(&HasEdgeBlend, sizeof(HasEdgeBlend), &Nb);
+	isave->Write(&HasAlphaCompare, sizeof(HasAlphaCompare), &Nb);
+	isave->Write(&HasDiffuseTexture, sizeof(HasDiffuseTexture), &Nb);
+	isave->Write(&MaskShadingType, sizeof(MaskShadingType), &Nb);
+	isave->Write(&ReflectionLitShadingType, sizeof(ReflectionLitShadingType), &Nb);
+	isave->Write(&ReflectionShadingType, sizeof(ReflectionShadingType), &Nb);
+	isave->Write(&DiffuseShadingType, sizeof(DiffuseShadingType), &Nb);
+	isave->Write(&AlphaReferenceValue, sizeof(AlphaReferenceValue), &Nb);
+	isave->Write(&SpecularColorShadigType, sizeof(SpecularColorShadigType), &Nb);
+	isave->Write(&DiffuseColorShadingType, sizeof(DiffuseColorShadingType), &Nb);
+	isave->Write(&InvisibleGeometry, sizeof(InvisibleGeometry), &Nb);
+	isave->Write(&Fogging, sizeof(Fogging), &Nb);
+	isave->Write(&TwoSided, sizeof(TwoSided), &Nb);
+	isave->Write(&HasVertexAlpha, sizeof(HasVertexAlpha), &Nb);
+	isave->Write(&SpecularExponent, sizeof(SpecularExponent), &Nb);
+	isave->Write(&VertexAlphaValue, sizeof(VertexAlphaValue), &Nb);
+	isave->Write(&SpecularColor.r, sizeof(SpecularColor.r), &Nb);
+	isave->Write(&SpecularColor.g, sizeof(SpecularColor.g), &Nb);
+	isave->Write(&SpecularColor.b, sizeof(SpecularColor.b), &Nb);
+	isave->Write(&DiffuseColor.r, sizeof(DiffuseColor.r), &Nb);
+	isave->Write(&DiffuseColor.g, sizeof(DiffuseColor.g), &Nb);
+	isave->Write(&DiffuseColor.b, sizeof(DiffuseColor.b), &Nb);
+	isave->Write(&AmbientColor.r, sizeof(AmbientColor.r), &Nb);
+	isave->Write(&AmbientColor.g, sizeof(AmbientColor.g), &Nb);
+	isave->Write(&AmbientColor.b, sizeof(AmbientColor.b), &Nb);
+	isave->EndChunk();
+
+	return IO_OK;
 }
 
 void MPKFMaterial::SetReference(int i, RefTargetHandle rtarg)

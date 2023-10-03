@@ -11,24 +11,52 @@
 #include <stdmat.h>
 #include <Graphics/ITextureDisplay.h>
 
-#define MPKFMaterial_CLASS_ID					Class_ID(0x74450439, 0x62673b6c)
-#define MPKFMaterial_PBLOCK_REF					0
-#define MPKFMaterial_SUB_TEXMAPS				5
-#define MPFKMaterial_DIFFUSE_TEXMAP				0
-#define MPFKMaterial_REFLECTION_TEXMAP			1
-#define MPFKMaterial_SPECULAR_TEXMAP			2
-#define MPFKMaterial_ALPHA_BLEND_TEXMAP			3
-#define MPFKMaterial_MASK_TEXMAP				4
-#define MPFKMaterial_DIFFUSE_TEXMAP_REF			1
-#define MPFKMaterial_REFLECTION_TEXMAP_REF		2
-#define MPFKMaterial_SPECULAR_TEXMAP_REF		3
-#define MPFKMaterial_ALPHA_BLEND_TEXMAP_REF		4
-#define MPFKMaterial_MASK_TEXMAP_REF			5
+#define MPKFMaterial_CLASS_ID								Class_ID(0x74450439, 0x62673b6c)
+#define MPKFMaterial_PBLOCK_REF								0
+#define MPKFMaterial_SUB_TEXMAPS							5
+
+#define MPFKMaterial_DIFFUSE_TEXMAP							0
+#define MPFKMaterial_REFLECTION_TEXMAP						1
+#define MPFKMaterial_BUMP_TEXMAP							2
+#define MPFKMaterial_ALPHA_BLEND_TEXMAP						3
+#define MPFKMaterial_MASK_TEXMAP							4
+
+#define MPFKMaterial_DIFFUSE_TEXMAP_REF						1
+#define MPFKMaterial_REFLECTION_TEXMAP_REF					2
+#define MPFKMaterial_BUMP_TEXMAP_REF						3
+#define MPFKMaterial_ALPHA_BLEND_TEXMAP_REF					4
+#define MPFKMaterial_MASK_TEXMAP_REF						5
+
+#define MPFKMaterial_GAME_IS_MP1							0
+#define MPFKMaterial_GAME_IS_MP2							1
+
+#define MPFKMaterial_DIFFUSE_COLOR_TYPE_NONE				0
+#define MPFKMaterial_DIFFUSE_COLOR_TYPE_COLOR				1
+#define MPFKMaterial_DIFFUSE_COLOR_TYPE_GOURAND				2
+
+#define MPFKMaterial_SPECULAR_COLOR_TYPE_NONE				0
+#define MPFKMaterial_SPECULAR_COLOR_TYPE_GOURAND			1
+
+#define MPFKMaterial_DIFFUSE_TEXMAP_TYPE_COPY				0
+#define MPFKMaterial_DIFFUSE_TEXMAP_TYPE_ADDITIVE			1
+#define MPFKMaterial_DIFFUSE_TEXMAP_TYPE_MULTIPLICATIVE		2
+
+#define MPFKMaterial_REFLECTION_TEXMAP_TYPE_COPY			0
+#define MPFKMaterial_REFLECTION_TEXMAP_TYPE_ADDITIVE		1
+#define MPFKMaterial_REFLECTION_TEXMAP_TYPE_MULTIPLICATIVE	2
+
+#define MPFKMaterial_LIT_TYPE_PHONG							0
+#define MPFKMaterial_LIT_TYPE_UVW2							1
+#define MPFKMaterial_LIT_TYPE_ENVIRONMENT					2
+
+#define MPFKMaterial_MASK_TEXMAP_TYPE_UVW1					0
+#define MPFKMaterial_MASK_TEXMAP_TYPE_UVW2					1
 
 class MPKFMaterial : public Mtl, public MaxSDK::Graphics::ITextureDisplay
 {
 public:
 	friend class MPKFMaterialPBAccessor;
+	friend class MPKFMaterialTexturingDlgProc;
 
 	MPKFMaterial();
 
@@ -213,9 +241,21 @@ private:
 
 	BOOL HasLit;
 
-	BOOL HasSpecularTexture;
+	BOOL HasBumpTexture;
 
 	BOOL HasMaskTexture;
 
-	static class MPKFMaterialBasicDlgProc* BasicDlgProc;
+	int CurrentGame;
+
+	float EmbossFactor;
+
+	BOOL ModelingUnshded;
+
+	BOOL ModelingWireframe;
+
+	BOOL HasModelingTransparency;
+
+	int ModelingTransparencyValue;
+
+	static class MPKFMaterialTexturingDlgProc* TexturingDlgProc;
 };

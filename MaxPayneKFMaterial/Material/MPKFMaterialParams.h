@@ -31,8 +31,8 @@ enum {
 	mpkfmaterial_params_has_reflection,
 	mpkfmaterial_params_reflection,
 	mpkfmaterial_params_has_lit,
-	mpkfmaterial_params_has_specular,
-	mpkfmaterial_params_specular,
+	mpkfmaterial_params_has_bump,
+	mpkfmaterial_params_bump,
 	mpkfmaterial_params_has_mask,
 	mpkfmaterial_params_mask,
 	mpkfmaterial_params_diffuse_texmap_type,
@@ -40,6 +40,12 @@ enum {
 	mpkfmaterial_params_reflection_lit_type,
 	mpkfmaterial_params_mask_texmap_type,
 	mpkfmaterial_params_reference_value,
+	mpkfmaterial_params_emboss_factor,
+	mpkfmaterial_params_game,
+	mpkfmaterial_params_modeling_unshaded,
+	mpkfmaterial_params_modeling_wireframe,
+	mpkfmaterial_params_modeling_transparency,
+	mpkfmaterial_params_modeling_transparency_value,
 };
 
 ParamBlockDesc2* GetMPKFMaterialParamBlock();
@@ -53,7 +59,7 @@ public:
 
 	void UpdateMtl();
 
-	void EnableDiffuseTexMap(BOOL Enable);
+	void UpdateControls();
 
 	virtual INT_PTR DlgProc(TimeValue t, IParamMap2* map, HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) override;
 
@@ -68,31 +74,12 @@ private:
 	HWND Handle;
 	MPKFMaterial* Material;
 	IMtlParams* Ip;
-};
-
-class MPKFMaterialBasicDlgProc : public ParamMap2UserDlgProc
-{
-public:
-	MPKFMaterialBasicDlgProc(class MPKFMaterial* InMaterial, IMtlParams* InIp);
-
-	virtual ~MPKFMaterialBasicDlgProc();
-
-	void UpdateMtl();
-
-	virtual INT_PTR DlgProc(TimeValue t, IParamMap2* map, HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) override;
-
-	void DeleteThis() override { delete this; }
-
-	//virtual void SetThing(ReferenceTarget* m) { }
-
-	//virtual void Update(TimeValue t) { }
-
-	//virtual void SetParamBlock(IParamBlock2* pb) { }
-private:
-	HWND Handle;
-	MPKFMaterial* Material;
-	IMtlParams* Ip;
-
-	//IColorSwatch* SpecularColor;
-	//IColorSwatch* DiffuseColor;
+	ISpinnerControl* EmbossFactorSpin;
+	ISpinnerControl* RefvalueSpin;
+	ICustButton* MaskTexmap;
+	ICustButton* BumpTexmap;
+	ICustButton* ReflectionTexmap;
+	ICustButton* DiffuseTexmap;
+	ICustButton* AlphaTexmap;
+	int CurrentGame;
 };
