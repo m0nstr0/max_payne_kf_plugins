@@ -51,7 +51,7 @@ void MPKFMaterialPBAccessor::Set(PB2Value& val, ReferenceMaker* owner, ParamID i
 		Material->SpecularColor.ClampMinMax();
 		break;
 	case mpkfmaterial_params_vertex_alpha:
-		Material->HasVertexAlpha = val.i;
+		Material->IsVertexAlphaOn = val.i;
 		break;
 	case mpkfmaterial_params_specular_exponent:
 		Material->SpecularExponent = val.f;
@@ -87,28 +87,28 @@ void MPKFMaterialPBAccessor::Set(PB2Value& val, ReferenceMaker* owner, ParamID i
 		Material->ReflectionLitShadingType = val.i;
 		break;
 	case mpkfmaterial_params_has_diffuse:
-		Material->HasDiffuseTexture = val.i;
+		Material->HasDiffuseTexmap = val.i;
 		break;
 	case mpkfmaterial_params_has_alpha_compare:
-		Material->HasAlphaCompare = val.i;
+		Material->HasAlphaComp = val.i;
 		break;
 	case mpkfmaterial_params_has_edge_blend:
-		Material->HasEdgeBlend = val.i;
+		Material->IsEdgeBlendOn = val.i;
 		break;
 	case mpkfmaterial_params_has_alpha_blend:
-		Material->HasAlphaBlendTexture = val.i;
+		Material->HasAlphaTexmap = val.i;
 		break;
 	case mpkfmaterial_params_has_reflection:
-		Material->HasReflectionTexture = val.i;
+		Material->HasReflectionTexmap = val.i;
 		break;
 	case mpkfmaterial_params_has_lit:
-		Material->HasLit = val.i;
+		Material->HasReflectionLit = val.i;
 		break;
 	case mpkfmaterial_params_has_bump:
-		Material->HasBumpTexture = val.i;
+		Material->HasBumpTexmap = val.i;
 		break;
 	case mpkfmaterial_params_has_mask:
-		Material->HasMaskTexture = val.i;
+		Material->HasMaskTexmap = val.i;
 		break;
 	case mpkfmaterial_params_game:
 		Material->CurrentGame = val.i;

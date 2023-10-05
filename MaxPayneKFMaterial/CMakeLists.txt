@@ -9,6 +9,7 @@ source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${MAX_ENGINE_SOURCE})
 add_library(MaxPayneKFMaterial SHARED ${MAX_ENGINE_SOURCE})
 
 target_link_libraries(MaxPayneKFMaterial 
+    MaxPayneCore
     MaxSDK::MaxSDK
     MaxSDK::GEOM
     MaxSDK::GFX

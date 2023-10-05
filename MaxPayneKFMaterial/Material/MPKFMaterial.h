@@ -10,6 +10,7 @@
 #include "MaxPayneKFMaterial.h"
 #include <stdmat.h>
 #include <Graphics/ITextureDisplay.h>
+#include <IMPKFMaterial.h>
 
 #define MPKFMaterial_CLASS_ID								Class_ID(0x74450439, 0x62673b6c)
 #define MPKFMaterial_PBLOCK_REF								0
@@ -52,7 +53,7 @@
 #define MPFKMaterial_MASK_TEXMAP_TYPE_UVW1					0
 #define MPFKMaterial_MASK_TEXMAP_TYPE_UVW2					1
 
-class MPKFMaterial : public Mtl, public MaxSDK::Graphics::ITextureDisplay
+class MPKFMaterial : public Mtl, public MaxSDK::Graphics::ITextureDisplay, public IMPKFMaterial
 {
 public:
 	friend class MPKFMaterialPBAccessor;
@@ -75,6 +76,55 @@ public:
 	Interval Validity(TimeValue t) override;
 
 	void Reset() override;
+	
+	//From IMPKFMaterial
+	KFMaterialGameVersion GetGameVersion() override;
+
+	bool IsTwoSided() override;
+	
+	bool IsFogging() override;
+
+	bool IsInvisibleGeometry() override;
+
+	bool HasVertexAlpha() override;
+	
+	int32_t GetVertexAlphaValue() override;
+
+	MPColor GetAmbientColor() override;
+
+	MPColor GetDiffuseColor() override;
+	KFDiffuseColorShadingType GetDiffuseColorShadingType() override;
+
+	MPColor GetSpecularColor() override;
+	KFSpecularColorShadingType GetSpecularColorShadingType() override;
+	float GetSpecularExponent() override;
+
+	bool HasDiffuseTexture() override;
+	void GetDiffuseTextureFileName() override;
+	KFDiffuseTextureShadingType GetDiffuseTextureShadingType() override;
+	bool HasEdgeBlend() override;
+	bool HasAlphaCompare() override;
+	float GetAlphaReferenceValue() override;
+
+	bool HasAlphaTexture() override;
+	void GetAlphaTextureFileName() override;
+
+	bool HasReflectionTexture() override;
+	void GetReflectionTextureFileName() override;
+	KFReflectionTextureShadingType GetReflectionShadingType() override;
+	
+	bool HasLit() override;
+	KFLitShadingType GetLitShadingType() override;
+
+	bool HasBumpTexture() override;
+	void GetBumpTextureFileName() override;
+	float GetBumpEmbossFactor() override;
+		
+	bool HasMaskTexture() override;
+	void GetMaskTextureFileName() override;
+	KFMaskTextureShadingType GetMaskTextureShadingType() override;
+
+	bool IsAllTexturesCorrect() override;
 
 	//From ITextureDisplay
 	void SetupTextures(TimeValue t, MaxSDK::Graphics::DisplayTextureHelper& updater) override;
@@ -207,7 +257,7 @@ private:
 
 	float SpecularExponent;
 
-	BOOL HasVertexAlpha;
+	BOOL IsVertexAlphaOn;
 
 	BOOL TwoSided;
 
@@ -229,21 +279,21 @@ private:
 	
 	int MaskShadingType;
 
-	BOOL HasDiffuseTexture;
+	BOOL HasDiffuseTexmap;
 
-	BOOL HasAlphaCompare;
+	BOOL HasAlphaComp;
 
-	BOOL HasEdgeBlend;
+	BOOL IsEdgeBlendOn;
 
-	BOOL HasAlphaBlendTexture;
+	BOOL HasAlphaTexmap;
 
-	BOOL HasReflectionTexture;
+	BOOL HasReflectionTexmap;
 
-	BOOL HasLit;
+	BOOL HasReflectionLit;
 
-	BOOL HasBumpTexture;
+	BOOL HasBumpTexmap;
 
-	BOOL HasMaskTexture;
+	BOOL HasMaskTexmap;
 
 	int CurrentGame;
 
