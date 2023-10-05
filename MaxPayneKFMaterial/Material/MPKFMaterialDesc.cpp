@@ -7,13 +7,10 @@
 
 #include "MPKFMaterialDesc.h"
 #include "MPKFMaterial.h"
-#include <IMaterialBrowserEntryInfo.h>
-#include <IMtlRender_Compatibility.h>
 
-class MPKFMaterialClassDesc : public ClassDesc2 //, public IMaterialBrowserEntryInfo
+class MPKFMaterialClassDesc : public ClassDesc2
 {
 public:
-
 	int IsPublic() override { return TRUE; }
 	void* Create(BOOL loading = FALSE) override { return new MPKFMaterial(loading); }
 	const TCHAR* ClassName() override { return _T("Max Payne KF Material"); }
@@ -23,20 +20,6 @@ public:
 	const TCHAR* Category() override { return _T(""); }
 	const TCHAR* InternalName() override { return _T("MPKFMaterial"); }
 	HINSTANCE     HInstance() override { return hInstance; }
-
-	
-	//bool IsCompatibleWithRenderer(ClassDesc& rendererClassDesc) override { return true; }
-
-	//FPInterface* GetInterface(Interface_ID id) {
-	//	if (IMATERIAL_BROWSER_ENTRY_INFO_INTERFACE == id) {
-	//		return static_cast<IMaterialBrowserEntryInfo*>(this);
-	//	}
-	//	return ClassDesc2::GetInterface(id);
-	//}
-
-	//const MCHAR* GetEntryName() const { return nullptr; }
-	//const MCHAR* GetEntryCategory() const { return _T("Materials\\Max Payne"); }
-	//Bitmap* GetEntryThumbnail() const { return nullptr; }
 };
 
 
