@@ -284,7 +284,9 @@ int MPKFExporter::DoExport(const MCHAR *name, ExpInterface *ei, Interface *i, BO
 
 	MPMemoryWriter MemoryWriter;
 
-	DoExportMaterials(MemoryWriter);
+	if (!DoExportMaterials(MemoryWriter, FilePath)) {
+		return IMPEXP_FAIL;
+	}
 
 	FILE* OutputFile = _tfopen(name, _T("w"));
 
@@ -390,7 +392,7 @@ bool MPKFExporter::DoExportMesh(IGameMesh* Mesh)
 	return false;
 }
 
-bool MPKFExporter::DoExportMaterials(MPMemoryWriter& MemoryWriter)
+bool MPKFExporter::DoExportMaterials(MPMemoryWriter& MemoryWriter, const TSTR& CopyDirTo)
 {
 	if (ExportOptions.ExportMaterials)
 	{
@@ -419,12 +421,12 @@ bool MPKFExporter::DoExportMaterials(MPMemoryWriter& MemoryWriter)
 			IGameMaterial* Material = pIgame->GetRootMaterial(MaterialIndex);
 			if (Material->IsSubObjType()) {
 				for (int SumMaterialIndex = 0; SumMaterialIndex < Material->GetSubMaterialCount(); SumMaterialIndex++) {
-					if (!DoExportMaterial(Material->GetSubMaterial(SumMaterialIndex), MaterialChunk.get())) {
+					if (!DoExportMaterial(Material->GetSubMaterial(SumMaterialIndex), CopyDirTo, MaterialChunk.get())) {
 						return false;
 					}
 				}
 			} else {
-				if (!DoExportMaterial(Material, MaterialChunk.get())) {
+				if (!DoExportMaterial(Material, CopyDirTo, MaterialChunk.get())) {
 					return false;
 				}
 			}
@@ -437,7 +439,7 @@ bool MPKFExporter::DoExportMaterials(MPMemoryWriter& MemoryWriter)
 	return true;
 }
 
-bool MPKFExporter::DoExportTexture(Texmap* Texture, MPMemoryChunkWriter* ChunkWriter)
+bool MPKFExporter::DoExportTexture(Texmap* Texture, const TSTR& CopyDirTo, MPMemoryChunkWriter* ChunkWriter)
 {
 	if (!Texture || Texture->ClassID() != MPKFTEXTURE_CLASS_ID) {
 		return false;
@@ -465,7 +467,7 @@ bool MPKFExporter::DoExportTexture(Texmap* Texture, MPMemoryChunkWriter* ChunkWr
 	} else {
 		*TexureChunkWriter << KFTexture->GetMipMapsNum();
 	}
-		
+
 	*TexureChunkWriter << static_cast<int32_t>(KFTexture->GetFiltering());
 	*TexureChunkWriter << NumberOfTextures;
 
@@ -482,8 +484,16 @@ bool MPKFExporter::DoExportTexture(Texmap* Texture, MPMemoryChunkWriter* ChunkWr
 
 		TSTR FilePath, FileName, FileExt;
 		SplitFilename(TSTR(TextureFileName), &FilePath, &FileName, &FileExt);
+
 		TSTR FileNameWithExt(FileName);
 		FileNameWithExt.Append(FileExt);
+
+		if (ExportOptions.CopyTexturesToExportPath) {
+			TSTR CopyPath(CopyDirTo);
+			CopyPath.Append(_T("\\")).Append(FileNameWithExt);
+			CopyFile(TextureFileName, CopyPath.data(), FALSE);
+		}
+
 		CStr FileNameAsc = FileNameWithExt.ToCStr();
 		*TexureChunkWriter << MPString(FileNameAsc.data(), FileNameAsc.Length());
 	}
@@ -501,7 +511,7 @@ bool MPKFExporter::DoExportTexture(Texmap* Texture, MPMemoryChunkWriter* ChunkWr
 	return true;
 }
 
-bool MPKFExporter::DoExportMaterial(IGameMaterial* Material, MPMemoryChunkWriter* ChunkWriter)
+bool MPKFExporter::DoExportMaterial(IGameMaterial* Material, const TSTR& CopyDirTo, MPMemoryChunkWriter* ChunkWriter)
 {
 	Mtl* MaxMaterial = Material->GetMaxMaterial();
 	
@@ -563,14 +573,14 @@ bool MPKFExporter::DoExportMaterial(IGameMaterial* Material, MPMemoryChunkWriter
 
 	*ChunkWriter << KFMaterial->HasDiffuseTexture();
 	if (KFMaterial->HasDiffuseTexture()) {
-		if (!DoExportTexture(KFMaterial->GetDiffuseTexture(), ChunkWriter)) {
+		if (!DoExportTexture(KFMaterial->GetDiffuseTexture(), CopyDirTo, ChunkWriter)) {
 			return false;
 		}
 	}
 
 	*ChunkWriter << KFMaterial->HasReflectionTexture();
 	if (KFMaterial->HasReflectionTexture()) {
-		if (!DoExportTexture(KFMaterial->GetReflectionTexture(), ChunkWriter)) {
+		if (!DoExportTexture(KFMaterial->GetReflectionTexture(), CopyDirTo, ChunkWriter)) {
 			return false;
 		}
 	}
@@ -578,7 +588,7 @@ bool MPKFExporter::DoExportMaterial(IGameMaterial* Material, MPMemoryChunkWriter
 	if (ExportOptions.Game == 0) {
 		*ChunkWriter << KFMaterial->HasBumpTexture();
 		if (KFMaterial->HasBumpTexture()) {
-			if (!DoExportTexture(KFMaterial->GetBumpTexture(), ChunkWriter)) {
+			if (!DoExportTexture(KFMaterial->GetBumpTexture(), CopyDirTo, ChunkWriter)) {
 				return false;
 			}
 		}
@@ -590,7 +600,7 @@ bool MPKFExporter::DoExportMaterial(IGameMaterial* Material, MPMemoryChunkWriter
 	if (ExportOptions.Game == 0) {
 		*ChunkWriter << KFMaterial->HasAlphaTexture();
 		if (KFMaterial->HasAlphaTexture()) {
-			if (!DoExportTexture(KFMaterial->GetAlphaTexture(), ChunkWriter)) {
+			if (!DoExportTexture(KFMaterial->GetAlphaTexture(), CopyDirTo, ChunkWriter)) {
 				return false;
 			}
 		}
@@ -602,7 +612,7 @@ bool MPKFExporter::DoExportMaterial(IGameMaterial* Material, MPMemoryChunkWriter
 	if (ExportOptions.Game == 0) {
 		*ChunkWriter << KFMaterial->HasMaskTexture();
 		if (KFMaterial->HasMaskTexture()) {
-			if (!DoExportTexture(KFMaterial->GetMaskTexture(), ChunkWriter)) {
+			if (!DoExportTexture(KFMaterial->GetMaskTexture(), CopyDirTo, ChunkWriter)) {
 				return false;
 			}
 		}

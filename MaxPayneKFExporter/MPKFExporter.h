@@ -71,11 +71,11 @@ public:
 
 	bool DoExportMesh(class IGameMesh* Mesh);
 
-	bool DoExportMaterials(class MPMemoryWriter& MemoryWriter);
+	bool DoExportMaterials(class MPMemoryWriter& MemoryWriter, const TSTR& CopyDirTo);
 
-	bool DoExportTexture(Texmap* Texture, class MPMemoryChunkWriter* ChunkWriter);
+	bool DoExportTexture(Texmap* Texture, const TSTR& CopyDirTo, class MPMemoryChunkWriter* ChunkWriter);
 
-	bool DoExportMaterial(class IGameMaterial* mat, class MPMemoryChunkWriter* ChunkWriter);
+	bool DoExportMaterial(class IGameMaterial* mat, const TSTR& CopyDirTo, class MPMemoryChunkWriter* ChunkWriter);
 
 	HWND GetMaxHWND() const { return MaxHWND; }
 private:
