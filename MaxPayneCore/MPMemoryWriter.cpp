@@ -7,7 +7,7 @@ void MPMemoryWriter::IncreaseCapacity()
 	uint8_t* NewData = new uint8_t[NewCapacity];
 	
 	std::memset(NewData, 0, NewCapacity);
-	std::memcpy(NewData, _Data, _Capacity);
+	std::memcpy(NewData, _Data, _Size);
 
 	delete[] _Data;
 	_Data = NewData;
@@ -17,16 +17,7 @@ void MPMemoryWriter::IncreaseCapacity()
 
 void MPMemoryWriter::WriteTag(uint8_t TagID)
 {
-	if (_Position + sizeof(TagID) >= _Capacity) {
-		IncreaseCapacity();
-	}
-
-	std::memcpy(&_Data[_Position], &TagID, sizeof(TagID));
-	_Position += sizeof(TagID);
-
-	if (_Position >= _Size) {
-		_Size = _Position + 1;
-	}
+	Write(&TagID, sizeof(uint8_t));
 }
 
 void MPMemoryWriter::Write(const void* Data, size_t Size)
@@ -39,17 +30,17 @@ void MPMemoryWriter::Write(const void* Data, size_t Size)
 	_Position += Size;
 
 	if (_Position >= _Size) {
-		_Size = _Position + 1;
+		_Size = _Position;
 	}
 }
 
 void MPMemoryWriter::WriteTagged(uint8_t TagID, const void* Data, size_t Size)
 {
-	WriteTag(TagID);
+	Write(&TagID, sizeof(uint8_t));
 	Write(Data, Size);
 }
 
-MPMemoryChunkWriter *MPMemoryWriter::CreateChunk(uint8_t TagID, uint32_t ID, uint8_t Version)
+MPMemoryChunkWriter *MPMemoryWriter::CreateChunk(uint8_t TagID, uint32_t ID, uint32_t Version)
 {
     return new MPMemoryChunkWriter(TagID, ID, Version);
 }
@@ -256,7 +247,7 @@ MPMemoryWriter *MPMemoryWriter::operator<<(const MPString &Data)
     return this;
 }
 
-MPMemoryChunkWriter::MPMemoryChunkWriter(uint8_t InTagID, uint32_t InID, uint8_t InVersion):
+MPMemoryChunkWriter::MPMemoryChunkWriter(uint8_t InTagID, uint32_t InID, uint32_t InVersion):
 	MPMemoryWriter(), TagID{ InTagID }, ID{ InID }, Version{ InVersion }
 {
 

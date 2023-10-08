@@ -1,4 +1,4 @@
-set(_Max_sdk_library_name geom gfx gup maxscrpt assetmanagement bmm paramblk2 maxutil mesh)
+set(_Max_sdk_library_name geom gfx gup maxscrpt assetmanagement bmm paramblk2 maxutil mesh igame)
 set(_Max_skd_library_path lib/x64/Release)
 set(_Max_skd_include_path include)
 

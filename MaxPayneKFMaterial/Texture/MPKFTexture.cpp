@@ -59,7 +59,7 @@ void MPKFTexturePBAccessor::Set(PB2Value& val, ReferenceMaker* owner, ParamID id
 			break;
 		}
 		case pb_mpkftexture_basic_params_mipmaps: {
-			Texture->MimapsMode = val.i;
+			Texture->MipMapsMode = val.i;
 			break;
 		}
 		case pb_mpkftexture_animation_params_start_frame: {
@@ -428,7 +428,7 @@ void MPKFTexture::Update(TimeValue t, Interval& valid)
 
 		pblock->GetValue(pb_mpkftexture_basic_params_filtering, t, Filtering, ivalid);
 
-		pblock->GetValue(pb_mpkftexture_basic_params_mipmaps, t, MimapsMode, ivalid);
+		pblock->GetValue(pb_mpkftexture_basic_params_mipmaps, t, MipMapsMode, ivalid);
 
 		pblock->GetValue(pb_mpkftexture_basic_params_mipmaps_num, t, MipmapsNum, ivalid);
 
@@ -507,6 +507,87 @@ void MPKFTexture::SetReference(int i, RefTargetHandle rtarg)
 	}
 }
 
+const MCHAR* MPKFTexture::GetTextureName()
+{
+	return GetName().data();
+}
+
+int32_t MPKFTexture::GetTexturesCount()
+{
+	return 1;
+}
+
+const MCHAR* MPKFTexture::GetTextureFileName(int32_t TextureIndex)
+{
+	if (ActiveBitmap) {
+		BitmapInfo Info = ActiveBitmap->GetBitmapInfo();
+		return Info.GetPathEx().ConvertToAbsolute().GetString().data();
+	}
+	return nullptr;
+}
+
+int32_t MPKFTexture::GetMipMapsNum()
+{
+	return MipmapsNum;
+}
+
+bool MPKFTexture::IsMipMapsAuto()
+{
+	return MipMapsMode == 0;
+}
+
+KFTextureFiltering MPKFTexture::GetFiltering()
+{
+	switch (Filtering) {
+	case 0:
+		return KFTextureFiltering::kNone;
+	case 1:
+		return KFTextureFiltering::kBilliner;
+	case 2:
+		return KFTextureFiltering::kTrillinear;
+	case 3:
+		return KFTextureFiltering::kAnisotropic;
+	case 4:
+		return KFTextureFiltering::kAuto;
+	}
+
+	return KFTextureFiltering::kAuto;
+}
+
+bool MPKFTexture::IsAnimationAutomaticStart()
+{
+	return IsAutomaticStart == TRUE;
+}
+
+bool MPKFTexture::IsAnimationRandomStartFrame()
+{
+	return IsRandomFrameStart == TRUE;
+}
+
+int32_t MPKFTexture::GetAnimationStartFrame()
+{
+	return StartFrame;
+}
+
+int32_t MPKFTexture::GetAnimationFPS()
+{
+	return PlaybackFPS;
+}
+
+KFTextureAnimationEndCondition MPKFTexture::GetAnimationEndCondition()
+{
+	switch (AnimationEndCondition) {
+	case 0:
+		return KFTextureAnimationEndCondition::kLoop;
+	case 1:
+		return KFTextureAnimationEndCondition::kPingPong;
+	case 2:
+		return KFTextureAnimationEndCondition::kHold;
+	}
+
+	return KFTextureAnimationEndCondition::kLoop;
+}
+
 RefResult MPKFTexture::NotifyRefChanged(const Interval& /*changeInt*/, RefTargetHandle hTarget, PartID& /*partID*/, RefMessage message, BOOL /*propagate*/)
 {
 	switch (message)
@@ -571,7 +652,7 @@ IOResult MPKFTexture::Save(ISave* isave)
 
 	isave->BeginChunk(MTL_PARAM_CHUNK);
 	isave->Write(&Filtering, sizeof(Filtering), &Nb);
-	isave->Write(&MimapsMode, sizeof(MimapsMode), &Nb);
+	isave->Write(&MipMapsMode, sizeof(MipMapsMode), &Nb);
 	isave->Write(&MipmapsNum, sizeof(MipmapsNum), &Nb);
 	isave->Write(&StartFrame, sizeof(StartFrame), &Nb);
 	isave->Write(&PlaybackFPS, sizeof(PlaybackFPS), &Nb);
@@ -604,7 +685,7 @@ IOResult MPKFTexture::Load(ILoad* iload)
 			case MTL_PARAM_CHUNK: {
 				IsMtlBase = FALSE;
 				res = iload->Read(&Filtering, sizeof(Filtering), &Nb);
-				res = iload->Read(&MimapsMode, sizeof(MimapsMode), &Nb);
+				res = iload->Read(&MipMapsMode, sizeof(MipMapsMode), &Nb);
 				res = iload->Read(&MipmapsNum, sizeof(MipmapsNum), &Nb);
 				res = iload->Read(&StartFrame, sizeof(StartFrame), &Nb);
 				res = iload->Read(&PlaybackFPS, sizeof(PlaybackFPS), &Nb);

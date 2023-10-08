@@ -4,6 +4,40 @@
 
 #define MPKFExporter_CLASS_ID       Class_ID(0x7f7d370d, 0x6e0c0771)
 
+struct MPKFExporterOptions
+{
+	int Game{ 0 };
+	bool ExportGeometry{ false };
+	bool ExportSkinning{ false };
+	bool ExportMaterials{ false };
+	bool ExportCameras{ false };
+	bool ExportLights{ false };
+	bool ExportAnimations{ false };
+	bool ExportHelpers{ false };
+	bool ExportEnvironmets{ false };
+	bool CopyTexturesToExportPath{ false };
+	bool Scale{ false };
+	float ScaleValue{ 0.01f };
+	bool RetainHierarchies{ false };
+	bool UsePivotAsMeshCenter{ false };
+	bool SaveReferencesOnlyOnce{ false };
+	bool RemoveFloatingVertices{ false };
+	bool RemoveHiddenObjects{ false };
+	bool UseGlobalAnimationRange{ false };
+	bool LoopWhenFinished{ false };
+	bool MaintainMatrixScaling{ false };
+	bool LoopInterpolation{ false };
+	bool DecEndFrameByOne{ false };
+	int SampleRate{ 30 };
+	float MinDeltaPosition{ 0.f };
+	float MinDeltaRotation{ 0.f };
+	int StartFrame{ 0 };
+	int EndFrame{ 100 };
+	int LoopToFrame{ 0 };
+	int FrameToFrameRotationInterpolation{ 0 };
+	TSTR Paths{};
+};
+
 class MPKFExporter: public SceneExport
 {
 public:
@@ -31,10 +65,21 @@ public:
 
 	void ShowAbout(HWND hWnd) override {}
 
-	/*
-	#define IMPEXP_FAIL 0
-	#define IMPEXP_SUCCESS 1
-	#define IMPEXP_CANCEL 2
-	 */
-	virtual int	DoExport(const MCHAR *name,ExpInterface *ei,Interface *i, BOOL suppressPrompts=FALSE, DWORD options=0) override;
+	int	DoExport(const MCHAR *name,ExpInterface *ei,Interface *i, BOOL suppressPrompts=FALSE, DWORD options=0) override;
+
+	MPKFExporterOptions* GetExportOptions() { return &ExportOptions; }
+
+	bool DoExportMesh(class IGameMesh* Mesh);
+
+	bool DoExportMaterials(class MPMemoryWriter& MemoryWriter);
+
+	bool DoExportTexture(Texmap* Texture, class MPMemoryChunkWriter* ChunkWriter);
+
+	bool DoExportMaterial(class IGameMaterial* mat, class MPMemoryChunkWriter* ChunkWriter);
+
+	HWND GetMaxHWND() const { return MaxHWND; }
+private:
+	MPKFExporterOptions ExportOptions;
+	HWND MaxHWND;
+	class IGameScene* pIgame;
 };

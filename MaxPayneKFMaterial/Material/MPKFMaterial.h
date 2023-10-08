@@ -88,7 +88,7 @@ public:
 
 	bool HasVertexAlpha() override;
 	
-	int32_t GetVertexAlphaValue() override;
+	float GetVertexAlphaValue() override;
 
 	MPColor GetAmbientColor() override;
 
@@ -100,28 +100,28 @@ public:
 	float GetSpecularExponent() override;
 
 	bool HasDiffuseTexture() override;
-	void GetDiffuseTextureFileName() override;
+	Texmap* GetDiffuseTexture() override;
 	KFDiffuseTextureShadingType GetDiffuseTextureShadingType() override;
 	bool HasEdgeBlend() override;
 	bool HasAlphaCompare() override;
 	float GetAlphaReferenceValue() override;
 
 	bool HasAlphaTexture() override;
-	void GetAlphaTextureFileName() override;
+	Texmap* GetAlphaTexture() override;
 
 	bool HasReflectionTexture() override;
-	void GetReflectionTextureFileName() override;
-	KFReflectionTextureShadingType GetReflectionShadingType() override;
+	Texmap* GetReflectionTexture() override;
+	KFReflectionTextureShadingType GetReflectionTextureShadingType() override;
 	
 	bool HasLit() override;
 	KFLitShadingType GetLitShadingType() override;
 
 	bool HasBumpTexture() override;
-	void GetBumpTextureFileName() override;
+	Texmap* GetBumpTexture() override;
 	float GetBumpEmbossFactor() override;
 		
 	bool HasMaskTexture() override;
-	void GetMaskTextureFileName() override;
+	Texmap* GetMaskTexture() override;
 	KFMaskTextureShadingType GetMaskTextureShadingType() override;
 
 	bool IsAllTexturesCorrect() override;

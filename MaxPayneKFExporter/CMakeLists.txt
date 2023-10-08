@@ -20,6 +20,7 @@ target_link_libraries(MaxPayneKFExporter
     MaxSDK::PARAMBLK2
     MaxSDK::MAXUTIL
     MaxSDK::MESH
+    MaxSDK::IGAME
 )
 
 set_target_properties(MaxPayneKFExporter PROPERTIES LINKER_LANGUAGE CXX)

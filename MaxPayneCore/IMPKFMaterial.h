@@ -57,7 +57,7 @@ struct MPColor
 	float B;
 	float A;
 
-	MPColor() : R{ 0.f }, G{ 0.f }, B{ 0.f }, A{ 1.f } {}
+	MPColor() : R{ 0.f }, G{ 0.f }, B{ 0.f }, A{ 255.f } {}
 
 	MPColor(float InR, float InG, float InB, float InA) : R{ InR }, G{ InG }, B{ InB }, A{ InA } {}
 };
@@ -75,7 +75,7 @@ public:
 
 	virtual bool HasVertexAlpha() = 0;
 	
-	virtual int32_t GetVertexAlphaValue() = 0;
+	virtual float GetVertexAlphaValue() = 0;
 
 	virtual MPColor GetAmbientColor() = 0;
 
@@ -87,28 +87,28 @@ public:
 	virtual float GetSpecularExponent() = 0;
 
 	virtual bool HasDiffuseTexture() = 0;
-	virtual void GetDiffuseTextureFileName() = 0;
+	virtual class Texmap* GetDiffuseTexture() = 0;
 	virtual KFDiffuseTextureShadingType GetDiffuseTextureShadingType() = 0;
 	virtual bool HasAlphaCompare() = 0;
 	virtual bool HasEdgeBlend() = 0;
 	virtual float GetAlphaReferenceValue() = 0;
 
 	virtual bool HasAlphaTexture() = 0;
-	virtual void GetAlphaTextureFileName() = 0;
+	virtual class Texmap* GetAlphaTexture() = 0;
 
 	virtual bool HasReflectionTexture() = 0;
-	virtual void GetReflectionTextureFileName() = 0;
-	virtual KFReflectionTextureShadingType GetReflectionShadingType() = 0;
+	virtual class Texmap* GetReflectionTexture() = 0;
+	virtual KFReflectionTextureShadingType GetReflectionTextureShadingType() = 0;
 	
 	virtual bool HasLit() = 0;
 	virtual KFLitShadingType GetLitShadingType() = 0;
 
 	virtual bool HasBumpTexture() = 0;
-	virtual void GetBumpTextureFileName() = 0;
+	virtual class Texmap* GetBumpTexture() = 0;
 	virtual float GetBumpEmbossFactor() = 0;
 		
 	virtual bool HasMaskTexture() = 0;
-	virtual void GetMaskTextureFileName() = 0;
+	virtual class Texmap* GetMaskTexture() = 0;
 	virtual KFMaskTextureShadingType GetMaskTextureShadingType() = 0;
 
 	virtual bool IsAllTexturesCorrect() = 0;

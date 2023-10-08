@@ -11,6 +11,7 @@
 #define NOMINMAX
 
 #include <Windows.h>
+#include <windowsx.h>
 #include <max.h>
 #include <3dsmaxport.h>
 #include <mtl.h>
@@ -18,6 +19,7 @@
 #include <iparamb2.h>
 #include <imtl.h>
 #include "resource.h"
+#include <IMPKFMaterial.h>
 
 extern HINSTANCE hInstance;
 

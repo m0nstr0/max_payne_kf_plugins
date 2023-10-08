@@ -14,6 +14,7 @@
 #include <bitmap.h>
 #include <stdmat.h>
 #include <IMaterialBrowserEntryInstanceCallback.h>
+#include <IMPKFTexture.h>
 
 #define MPKFTexture_CLASS_ID	Class_ID(0x35bb1f36, 0x2a4a7430)
 #define MPKFTexture_PBLOCK_REF	0
@@ -28,7 +29,7 @@ public:
 	int Changed(ULONG flags) override;
 };
 
-class MPKFTexture : public Texmap
+class MPKFTexture : public Texmap, public IMPKFTexture
 {
 public:
 	friend class MPKFTexturePBAccessor;
@@ -136,6 +137,29 @@ public:
 
 	void DeleteThis() override { delete this; }
 
+	// Inherited via IMPKFTexute
+	virtual const MCHAR* GetTextureName() override;
+
+	virtual int32_t GetTexturesCount() override;
+
+	virtual const MCHAR* GetTextureFileName(int32_t TextureIndex) override;
+
+	virtual int32_t GetMipMapsNum() override;
+
+	virtual bool IsMipMapsAuto() override;
+
+	virtual KFTextureFiltering GetFiltering() override;
+
+	virtual bool IsAnimationAutomaticStart() override;
+
+	virtual bool IsAnimationRandomStartFrame() override;
+
+	virtual int32_t GetAnimationStartFrame() override;
+
+	virtual int32_t GetAnimationFPS() override;
+
+	virtual KFTextureAnimationEndCondition GetAnimationEndCondition() override;
+
 protected:
 	void SetReference(int i, RefTargetHandle rtarg) override;
 
@@ -152,7 +176,7 @@ private:
 
 	int Filtering;
 
-	int MimapsMode;
+	int MipMapsMode;
 
 	int MipmapsNum;
 

@@ -46,18 +46,10 @@ struct MPMatrix4x4
 
 struct MPString
 {
-    char* Str;
+    const char* Str;
     int32_t Length;
 
-    MPString(const char* InStr, int32_t InLength)
+    MPString(const char* InStr, int32_t InLength): Str{InStr}, Length{InLength}
     {
-        Str = new char[InLength];
-        std::memcpy(Str, InStr, InLength);
-    }
-
-    ~MPString() {
-        if (Str) {
-            delete[] Str;
-        }
     }
 };

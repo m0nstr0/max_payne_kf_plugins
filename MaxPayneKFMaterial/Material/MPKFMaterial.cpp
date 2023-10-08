@@ -273,19 +273,19 @@ bool MPKFMaterial::HasVertexAlpha()
     return IsVertexAlphaOn == TRUE;
 }
 
-int32_t MPKFMaterial::GetVertexAlphaValue()
+float MPKFMaterial::GetVertexAlphaValue()
 {
-    return static_cast<int32_t>(VertexAlphaValue);
+    return static_cast<float>(VertexAlphaValue) / 100.f;
 }
 
 MPColor MPKFMaterial::GetAmbientColor()
 {
-    return MPColor(AmbientColor.r, AmbientColor.g, AmbientColor.b, 1.f);
+    return MPColor(AmbientColor.r * 255.f, AmbientColor.g * 255.f, AmbientColor.b * 255.f, 255.f);
 }
 
 MPColor MPKFMaterial::GetDiffuseColor()
 {
-    return MPColor(DiffuseColor.r, DiffuseColor.g, DiffuseColor.b, 1.f);
+    return MPColor(DiffuseColor.r * 255.f, DiffuseColor.g * 255.f, DiffuseColor.b * 255.f, 255.f);
 }
 
 KFDiffuseColorShadingType MPKFMaterial::GetDiffuseColorShadingType()
@@ -305,7 +305,7 @@ KFDiffuseColorShadingType MPKFMaterial::GetDiffuseColorShadingType()
 
 MPColor MPKFMaterial::GetSpecularColor()
 {
-    return MPColor(SpecularColor.r, SpecularColor.g, SpecularColor.b, 1.f);
+    return MPColor(SpecularColor.r * 255.f, SpecularColor.g * 255.f, SpecularColor.b * 255.f, 255.f);
 }
 
 KFSpecularColorShadingType MPKFMaterial::GetSpecularColorShadingType()
@@ -331,8 +331,9 @@ bool MPKFMaterial::HasDiffuseTexture()
     return HasDiffuseTexmap;
 }
 
-void MPKFMaterial::GetDiffuseTextureFileName()
+Texmap* MPKFMaterial::GetDiffuseTexture()
 {
+	return SubTexmaps[MPFKMaterial_DIFFUSE_TEXMAP];
 }
 
 KFDiffuseTextureShadingType MPKFMaterial::GetDiffuseTextureShadingType()
@@ -370,8 +371,9 @@ bool MPKFMaterial::HasAlphaTexture()
     return HasAlphaTexmap;
 }
 
-void MPKFMaterial::GetAlphaTextureFileName()
+Texmap* MPKFMaterial::GetAlphaTexture()
 {
+	return SubTexmaps[MPFKMaterial_ALPHA_BLEND_TEXMAP];
 }
 
 bool MPKFMaterial::HasReflectionTexture()
@@ -379,11 +381,12 @@ bool MPKFMaterial::HasReflectionTexture()
     return HasReflectionTexmap;
 }
 
-void MPKFMaterial::GetReflectionTextureFileName()
+Texmap* MPKFMaterial::GetReflectionTexture()
 {
+	return SubTexmaps[MPFKMaterial_REFLECTION_TEXMAP];
 }
 
-KFReflectionTextureShadingType MPKFMaterial::GetReflectionShadingType()
+KFReflectionTextureShadingType MPKFMaterial::GetReflectionTextureShadingType()
 {
     switch (ReflectionShadingType)
 	{
@@ -423,8 +426,9 @@ bool MPKFMaterial::HasBumpTexture()
     return HasBumpTexmap;
 }
 
-void MPKFMaterial::GetBumpTextureFileName()
+Texmap* MPKFMaterial::GetBumpTexture()
 {
+	return SubTexmaps[MPFKMaterial_BUMP_TEXMAP];
 }
 
 float MPKFMaterial::GetBumpEmbossFactor()
@@ -437,8 +441,9 @@ bool MPKFMaterial::HasMaskTexture()
     return HasMaskTexmap;
 }
 
-void MPKFMaterial::GetMaskTextureFileName()
+Texmap* MPKFMaterial::GetMaskTexture()
 {
+	return SubTexmaps[MPFKMaterial_MASK_TEXMAP];
 }
 
 KFMaskTextureShadingType MPKFMaterial::GetMaskTextureShadingType()

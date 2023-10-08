@@ -3,6 +3,31 @@
 #include "MPType.h"
 #include <cstdint>
 
+#define MPKFTYPE_MATERIAL_LIST_CHUNK_ID						0x0001000F
+#define MPKFTYPE_MESH_CHUNK_ID								0x00010005
+#define MPKFTYPE_SKIN_CHUNK_ID								0x00010014
+#define MPKFTYPE_KEYFRAME_ANIMATION_CHUNK_ID				0x00010012
+#define MPKFTYPE_CAMERA_CHUNK_ID							0x00010001
+#define MPKFTYPE_POINT_LIGHT_CHUNK_ID						0x00010002
+#define MPKFTYPE_DIRECTIONAL_LIGHT_CHUNK_ID					0x00010003
+#define MPKFTYPE_SPOT_LIGHT_CHUNK_ID						0x00010004
+#define MPKFTYPE_ENVIRONMENT_CHUNK_ID						0x00010015
+#define MPKFTYPE_HELPER_CHUNK_ID							0x00010016
+#define MPKFTYPE_POINT_LIGHT_ANIMATION_CHUNK_ID				0x00010017
+#define MPKFTYPE_DIRECTIONAL_LIGHT_ANIMATION_CHUNK_ID		0x00010018
+#define MPKFTYPE_SPOT_LIGHT_ANIMATION_CHUNK_ID				0x00010019
+#define MPKFTYPE_MATERIAL_SUB_CHUNK_ID						0x00010010
+#define MPKFTYPE_TEXTURE_SUB_CHUNK_ID						0x00010011
+#define MPKFTYPE_NODE_SUB_CHUNK_ID							0x00010000
+#define MPKFTYPE_GEOMETRY_SUB_CHUNK_ID						0x00010006
+#define MPKFTYPE_POLYGONS_SUB_CHUNK_ID						0x00010007
+#define MPKFTYPE_POLYGON_SUB_CHUNK_ID						0x00010008
+#define MPKFTYPE_POLYGON_MATERIAL_SUB_CHUNK_ID				0x0001000C
+#define MPKFTYPE_UV_MAPPING_SUB_CHUNK_ID					0x0001000e
+#define MPKFTYPE_REFERENCE_TO_DATA_SUB_CHUNK_ID				0x0001001A
+#define MPKFTYPE_SMOOTHING_SUB_CHUNK_ID						0x0001000B
+#define MPKFTYPE_ANIMATION_SUB_CHUNK_ID						0x00010013
+
 class MPMemoryChunkWriter;
 
 class MPMemoryWriter
@@ -72,7 +97,7 @@ public:
 
 	void WriteTagged(uint8_t TagID, const void* Data, size_t Size);
 
-	MPMemoryChunkWriter* CreateChunk(uint8_t TagID, uint32_t ID, uint8_t Version);
+	MPMemoryChunkWriter* CreateChunk(uint8_t TagID, uint32_t ID, uint32_t Version);
 
 protected:
 	void IncreaseCapacity();
@@ -92,7 +117,7 @@ class MPMemoryChunkWriter : public MPMemoryWriter
 public:
 	MPMemoryChunkWriter() = delete;
 
-	MPMemoryChunkWriter(uint8_t InTagID, uint32_t InID, uint8_t InVersion);
+	MPMemoryChunkWriter(uint8_t InTagID, uint32_t InID, uint32_t InVersion);
 
 	MPMemoryChunkWriter(const MPMemoryWriter& Other) = delete;
 
@@ -106,14 +131,14 @@ public:
 
 	uint8_t GetTagID() const { return TagID; }
 
-	uint8_t GetID() const { return ID; }
+	uint32_t GetID() const { return ID; }
 
-	uint8_t GetVersion() const { return Version; }
+	uint32_t GetVersion() const { return Version; }
 
 private:
 	uint8_t TagID;
 
 	uint32_t ID;
 
-	uint8_t Version;
+	uint32_t Version;
 };
