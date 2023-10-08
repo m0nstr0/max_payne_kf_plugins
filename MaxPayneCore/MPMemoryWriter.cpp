@@ -51,6 +51,8 @@ MPMemoryWriter::MPMemoryWriter()
 	_Size = 0;
 	_Capacity = 4096;
 	_Data = new uint8_t[_Capacity];
+
+	std::memset(_Data, 0, _Capacity);
 }
 
 MPMemoryWriter::~MPMemoryWriter()

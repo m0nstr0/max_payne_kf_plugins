@@ -10,6 +10,28 @@
 #include <3dsmaxport.h>
 #include <MPMemoryWriter.h>
 #include <IMPKFTexture.h>
+#include <set>
+#include <vector>
+#include <map>
+#include <MPKFType.h>
+
+#define WRITE_ASCII_STRING(VariableName, MCharString, Writer)	\
+	TSTR VariableName = TSTR(MCharString);						\
+	if (!IsASCII(VariableName.data())) {						\
+		return false;											\
+	}															\
+	CStr VariableName##Asc = VariableName.ToCStr();				\
+	*Writer << MPString(VariableName##Asc.data(), VariableName##Asc.Length());	
+
+#define MPKFEXPORTER_ERROR_NONE		0
+#define MPKFEXPORTER_ERROR_NONE1	0
+#define MPKFEXPORTER_ERROR_NONE2	0
+#define MPKFEXPORTER_ERROR_NONE3	0
+#define MPKFEXPORTER_ERROR_NONE4	0
+#define MPKFEXPORTER_ERROR_NONE5	0
+#define MPKFEXPORTER_ERROR_NONE6	0
+#define MPKFEXPORTER_ERROR_NONE7	0
+#define MPKFEXPORTER_ERROR_NONE8	0
 
 bool IsASCII(const MCHAR* Str, size_t Length = -1)
 {
@@ -288,7 +310,11 @@ int MPKFExporter::DoExport(const MCHAR *name, ExpInterface *ei, Interface *i, BO
 		return IMPEXP_FAIL;
 	}
 
-	FILE* OutputFile = _tfopen(name, _T("w"));
+	if (!DoExportNodes(MemoryWriter)) {
+		return IMPEXP_FAIL;
+	}
+
+	FILE* OutputFile = _tfopen(name, _T("wb"));
 
 	fwrite(MemoryWriter.GetData(), MemoryWriter.GetSize(), 1, OutputFile);
 
@@ -387,54 +413,326 @@ int MPKFExporter::DoExport(const MCHAR *name, ExpInterface *ei, Interface *i, BO
     return IMPEXP_SUCCESS;
 }
 
-bool MPKFExporter::DoExportMesh(IGameMesh* Mesh)
+bool MPKFExporter::DoExportNodes(MPMemoryWriter& MemoryWriter)
 {
-	return false;
+	const int TopLevelNodesNum = pIgame->GetTopLevelNodeCount();
+
+	for (int TopLevelNodeIndex{ 0 }; TopLevelNodeIndex < TopLevelNodesNum; TopLevelNodeIndex++)
+	{
+		IGameNode* Node = pIgame->GetTopLevelNode(TopLevelNodeIndex);
+
+		IGameObject* GameObject = Node->GetIGameObject();
+		IGameObject::ObjectTypes ObjectType = GameObject->GetIGameType();
+
+		if (ObjectType == IGameObject::IGAME_MESH) {
+			IGameMesh* Mesh = (IGameMesh*)GameObject;
+			std::unique_ptr<MPMemoryChunkWriter> MeshChunk{ MemoryWriter.CreateChunk(0x0C, MPKFTYPE_MESH_CHUNK_ID, 2) };
+			if (!DoExportMesh(Node, Mesh, MeshChunk.get())) {
+				Node->ReleaseIGameObject();
+				return false;
+			}
+			MemoryWriter << MeshChunk.get();
+			MeshChunk.reset();
+		}
+
+		Node->ReleaseIGameObject();
+
+		//Node->GetChildCount();
+
+		//! Access the n'th child node of the parent node
+		/*!
+		\param index The index to the child to retrieve
+		\return IGameNode pointer to the child
+		*/
+		//Node->GetNodeChild(int index);
+
+		//if (ExportOptions.RemoveHiddenObjects && Node->IsNodeHidden()) {
+		//	continue;
+		//}
+
+		
+		
+		
+				//{
+				   // case IGameObject::IGAME_MESH: {
+					   // IGameMesh * gM = (IGameMesh*)obj;
+						//gM->SetCreateOptimizedNormalList();
+							//if(gM->InitializeData())
+							//{
+								//CreateXMLNode(pXMLDoc,parent,_T("Mesh"),&geomData);
+								//if(splitFile)
+								//{
+								//	TSTR filename;
+								//	MakeSplitFilename(child,filename);
+
+								//	AddXMLAttribute(geomData, _T("Include"),filename.data());
+								//	CreateXMLNode(pSubDocMesh,pSubMesh,_T("Mesh"),&subMeshNode);
+								//	AddXMLAttribute(subMeshNode,_T("Node"),child->GetName());
+								//	geomData = subMeshNode;
+
+								//}
+								//DumpMesh(gM,geomData);
+							//}
+				   // }
+	}
+
+	return true;
+}
+
+bool MPKFExporter::DoExportNode(IGameNode* Node, MPMemoryChunkWriter* ChunkWriter)
+{
+	WRITE_ASCII_STRING(NodeName, Node->GetName(), ChunkWriter);
+
+	IGameNode* ParentNode = Node->GetNodeParent();
+	if (ParentNode) {
+		WRITE_ASCII_STRING(ParentNodeName, ParentNode->GetName(), ChunkWriter);
+	}
+	else {
+		*ChunkWriter << MPString(nullptr, 0);
+	}
+
+	GMatrix LocalMatrix = Node->GetLocalTM();
+	Point4 Row1 = LocalMatrix.GetRow(0);
+	Point4 Row2 = LocalMatrix.GetRow(1);
+	Point4 Row3 = LocalMatrix.GetRow(2);
+	Point4 Row4 = LocalMatrix.GetRow(3); 
+
+	MPMatrix4x3 NodeMatrix(Row1.x, Row1.y, Row1.z, Row2.x, Row2.y, Row2.z, Row3.x, Row3.y, Row3.z, Row4.x, Row4.y, Row4.z);
+
+	*ChunkWriter << NodeMatrix;
+
+	if (ParentNode) {
+		*ChunkWriter << true;
+	}
+	else {
+		*ChunkWriter << false;
+	}
+
+	*ChunkWriter << MPString(nullptr, 0);
+
+	return true;
+}
+
+bool MPKFExporter::DoExportMesh(IGameNode* Node, IGameMesh* Mesh, MPMemoryChunkWriter* ChunkWriter)
+{
+	Mesh->SetCreateOptimizedNormalList();
+	if (!Mesh->InitializeData()) {
+		return false;
+	}
+
+	std::unique_ptr<MPMemoryChunkWriter> NodeChunk{ ChunkWriter->CreateChunk(0x0C, MPKFTYPE_NODE_SUB_CHUNK_ID, 1) };
+	if (!DoExportNode(Node, NodeChunk.get())) {
+		return false;
+	}
+	*ChunkWriter << NodeChunk.get();
+	NodeChunk.reset();
+
+	//Geometry
+	std::unique_ptr<MPMemoryChunkWriter> GeometryChunk{ ChunkWriter->CreateChunk(0x0C, MPKFTYPE_GEOMETRY_SUB_CHUNK_ID, 1) };
+	std::vector<MPVector3> LocalNormals;
+	std::vector<MPVector2> LocalTexVertices;
+	std::vector<MPVector3> LocalVertices;
+	std::vector<uint16_t> LocalIndices;
+	std::map<uint16_t, std::map<uint16_t, uint16_t>> MaxVertexToLocal;
+
+	std::vector<MPVector3> MeshVertices;
+	std::vector<MPVector2> MeshTexVertices;
+	std::vector<MPVector3> MeshNormals;
+	std::vector<uint16_t> MeshIndices;
+	std::vector<uint32_t> MeshVerticesPerPrimitive;
+	std::vector<uint32_t> MeshIndicesPerPrimitive;
+	std::vector<IGameMaterial*> MaterialPerPrimitive;
+
+	Tab<int> ActiveMatIDs = Mesh->GetActiveMatIDs();
+
+	for (int ActiveMatID = 0; ActiveMatID < ActiveMatIDs.Count(); ActiveMatID++)
+	{
+		LocalNormals.clear();
+		LocalVertices.clear();
+		LocalIndices.clear();
+		LocalTexVertices.clear();
+		MaxVertexToLocal.clear();
+
+		Tab<FaceEx*> Faces = Mesh->GetFacesFromMatID(ActiveMatIDs[ActiveMatID]);
+		for (int FaceID = 0; FaceID < Faces.Count(); FaceID++)
+		{
+			FaceEx* Face = Faces[FaceID];
+		
+			if (FaceID == 0) {
+				MaterialPerPrimitive.push_back(Mesh->GetMaterialFromFace(Face->meshFaceIndex));
+			}
+
+			for (uint16_t i = 0; i < 3; i++) {
+				if (MaxVertexToLocal.contains(Face->vert[i]) && MaxVertexToLocal[Face->vert[i]].contains(Face->norm[i])) {
+					LocalIndices.push_back(MaxVertexToLocal[Face->vert[i]][Face->norm[i]]);
+					continue;
+				}
+
+				MaxVertexToLocal[Face->vert[i]][Face->norm[i]] = LocalVertices.size();
+
+				float ScaleValue = 1.f;
+				if (ExportOptions.Scale) {
+					ScaleValue = ExportOptions.ScaleValue;
+				}
+
+				Point2 TexVertex = Mesh->GetTexVertex(Face->texCoord[i]);
+				LocalTexVertices.push_back(MPVector2(TexVertex.x, TexVertex.y));
+
+				Point3 Vertex = Mesh->GetVertex(Face->vert[i], true);
+				LocalVertices.push_back(MPVector3(Vertex.x * ScaleValue, Vertex.y * ScaleValue, Vertex.z * ScaleValue));
+
+				Point3 Normal = Mesh->GetNormal(Face->norm[i], true);
+				LocalNormals.push_back(MPVector3(Normal.x, Normal.y, Normal.z));
+
+				LocalIndices.push_back(MaxVertexToLocal[Face->vert[i]][Face->norm[i]]);
+			}
+		}
+
+		for (MPVector3& Vertex : LocalVertices) {
+			MeshVertices.push_back(Vertex);
+		}
+
+		for (MPVector3& Normal : LocalNormals) {
+			MeshNormals.push_back(Normal);
+		}
+
+		for (MPVector2& TexVertex : LocalTexVertices) {
+			MeshTexVertices.push_back(TexVertex);
+		}
+
+		for (uint16_t Index : LocalIndices) {
+			MeshIndices.push_back(Index);
+		}
+
+		MeshVerticesPerPrimitive.push_back(LocalVertices.size());
+
+		MeshIndicesPerPrimitive.push_back(LocalIndices.size());
+	}
+
+	*GeometryChunk << static_cast<uint32_t>(MeshVertices.size());
+
+	for (const MPVector3& Vertex : MeshVertices) {
+		GeometryChunk->Write(&Vertex.X, sizeof(float));
+		GeometryChunk->Write(&Vertex.Y, sizeof(float));
+		GeometryChunk->Write(&Vertex.Z, sizeof(float));
+	}
+
+	for (const MPVector3& Vertex : MeshNormals) {
+		GeometryChunk->Write(&Vertex.X, sizeof(float));
+		GeometryChunk->Write(&Vertex.Y, sizeof(float));
+		GeometryChunk->Write(&Vertex.Z, sizeof(float));
+	}
+
+	*GeometryChunk << static_cast<uint32_t>(MeshVerticesPerPrimitive.size());
+
+	for (uint32_t NumberVertices : MeshVerticesPerPrimitive) {
+		*GeometryChunk << NumberVertices;
+	}
+
+	*ChunkWriter << GeometryChunk.get();
+	GeometryChunk.reset();
+
+	//Polygons
+	std::unique_ptr<MPMemoryChunkWriter> PolygonsChunk{ ChunkWriter->CreateChunk(0x0C, MPKFTYPE_POLYGONS_SUB_CHUNK_ID, 1) };
+
+	*PolygonsChunk << static_cast<uint32_t>(MeshIndices.size());
+
+	for (const uint16_t Index : MeshIndices) {
+		PolygonsChunk->Write(&Index, sizeof(uint16_t));
+	}
+	
+	*PolygonsChunk << static_cast<uint32_t>(MeshIndicesPerPrimitive.size());
+
+	for (const uint16_t NumIndices : MeshIndicesPerPrimitive) {
+		*PolygonsChunk << static_cast<uint32_t>(NumIndices / 3);
+	}
+
+	*ChunkWriter << PolygonsChunk.get();
+	PolygonsChunk.reset();
+
+	//TODO: Skip?
+	//Polygon Materials
+	std::unique_ptr<MPMemoryChunkWriter> PolygonMaterialsChunk{ ChunkWriter->CreateChunk(0x0C, MPKFTYPE_POLYGON_MATERIAL_SUB_CHUNK_ID, 1) };
+
+	*PolygonMaterialsChunk << static_cast<int32_t>(MaterialPerPrimitive.size());
+	
+	for (IGameMaterial* Material : MaterialPerPrimitive) {
+		WRITE_ASCII_STRING(MaterialName, Material->GetMaterialName(), PolygonMaterialsChunk);
+	}
+
+	*ChunkWriter << PolygonMaterialsChunk.get();
+	PolygonMaterialsChunk.reset();
+
+	//Polygon UVW
+	std::unique_ptr<MPMemoryChunkWriter> UVChunk{ ChunkWriter->CreateChunk(0x0C, MPKFTYPE_UV_MAPPING_SUB_CHUNK_ID, 1) };
+
+	*UVChunk << static_cast<uint32_t>(0);
+	
+	*UVChunk << static_cast<uint32_t>(MeshTexVertices.size());
+
+	for (MPVector2& Vertex : MeshTexVertices) {
+		float Z = 0.f;
+		UVChunk->Write(&Vertex.X, sizeof(float));
+		UVChunk->Write(&Vertex.Y, sizeof(float));
+		UVChunk->Write(&Z, sizeof(float));
+	}
+
+	*UVChunk << static_cast<uint32_t>(MeshVerticesPerPrimitive.size());
+
+	for (uint32_t NumberVertices : MeshVerticesPerPrimitive) {
+		*UVChunk << NumberVertices;
+	}
+
+	*ChunkWriter << UVChunk.get();
+	UVChunk.reset();
+
+	return true;
 }
 
 bool MPKFExporter::DoExportMaterials(MPMemoryWriter& MemoryWriter, const TSTR& CopyDirTo)
 {
-	if (ExportOptions.ExportMaterials)
-	{
-		std::unique_ptr<MPMemoryChunkWriter> MaterialListChunk{ MemoryWriter.CreateChunk(0x0C, MPKFTYPE_MATERIAL_LIST_CHUNK_ID, 0) };
+	if (!ExportOptions.ExportMaterials) {
+		return true;
+	}
 
-		const int NumberOfRootMaterials = pIgame->GetRootMaterialCount();
+	std::unique_ptr<MPMemoryChunkWriter> MaterialListChunk{ MemoryWriter.CreateChunk(0x0C, MPKFTYPE_MATERIAL_LIST_CHUNK_ID, 0) };
 
-		int32_t TotalNumberOfMaterials = 0;
-		for (int MaterialIndex = 0; MaterialIndex < NumberOfRootMaterials; MaterialIndex++) {
-			IGameMaterial* Material = pIgame->GetRootMaterial(MaterialIndex);
-			if (Material->IsSubObjType()) {
-				TotalNumberOfMaterials += Material->GetSubMaterialCount();
-			}
-			else {
-				TotalNumberOfMaterials += 1;
-			}
+	const int NumberOfRootMaterials = pIgame->GetRootMaterialCount();
+
+	int32_t TotalNumberOfMaterials = 0;
+	for (int MaterialIndex = 0; MaterialIndex < NumberOfRootMaterials; MaterialIndex++) {
+		IGameMaterial* Material = pIgame->GetRootMaterial(MaterialIndex);
+		if (Material->IsSubObjType()) {
+			TotalNumberOfMaterials += Material->GetSubMaterialCount();
 		}
+		else {
+			TotalNumberOfMaterials += 1;
+		}
+	}
 
-		CStr PathsAsc = ExportOptions.Paths.ToCStr();
-		*MaterialListChunk << MPString(PathsAsc.data(), PathsAsc.Length());
+	CStr PathsAsc = ExportOptions.Paths.ToCStr();
+	*MaterialListChunk << MPString(PathsAsc.data(), PathsAsc.Length());
 
-		*MaterialListChunk << TotalNumberOfMaterials;
+	*MaterialListChunk << TotalNumberOfMaterials;
 
-		for (int MaterialIndex = 0; MaterialIndex < NumberOfRootMaterials; MaterialIndex++) {
-			std::unique_ptr<MPMemoryChunkWriter> MaterialChunk{ MemoryWriter.CreateChunk(0x0C, MPKFTYPE_MATERIAL_SUB_CHUNK_ID, ExportOptions.Game == 0 ? 1 : 0) };
-			IGameMaterial* Material = pIgame->GetRootMaterial(MaterialIndex);
-			if (Material->IsSubObjType()) {
-				for (int SumMaterialIndex = 0; SumMaterialIndex < Material->GetSubMaterialCount(); SumMaterialIndex++) {
-					if (!DoExportMaterial(Material->GetSubMaterial(SumMaterialIndex), CopyDirTo, MaterialChunk.get())) {
-						return false;
-					}
-				}
-			} else {
-				if (!DoExportMaterial(Material, CopyDirTo, MaterialChunk.get())) {
+	for (int MaterialIndex = 0; MaterialIndex < NumberOfRootMaterials; MaterialIndex++) {
+		std::unique_ptr<MPMemoryChunkWriter> MaterialChunk{ MemoryWriter.CreateChunk(0x0C, MPKFTYPE_MATERIAL_SUB_CHUNK_ID, ExportOptions.Game == 0 ? 1 : 0) };
+		IGameMaterial* Material = pIgame->GetRootMaterial(MaterialIndex);
+		if (Material->IsSubObjType()) {
+			for (int SumMaterialIndex = 0; SumMaterialIndex < Material->GetSubMaterialCount(); SumMaterialIndex++) {
+				if (!DoExportMaterial(Material->GetSubMaterial(SumMaterialIndex), CopyDirTo, MaterialChunk.get())) {
 					return false;
 				}
 			}
-			*MaterialListChunk << MaterialChunk.get();
+		} else {
+			if (!DoExportMaterial(Material, CopyDirTo, MaterialChunk.get())) {
+				return false;
+			}
 		}
-
-		MemoryWriter << MaterialListChunk.get();
+		*MaterialListChunk << MaterialChunk.get();
 	}
+
+	MemoryWriter << MaterialListChunk.get();
 
 	return true;
 }
@@ -632,212 +930,3 @@ bool MPKFExporter::DoExportMaterial(IGameMaterial* Material, const TSTR& CopyDir
 	
 	return true;
 }
-
-/*
-	CComPtr <IXMLDOMNode> vertData,faceData;
-	CComPtr <IXMLDOMNode> node;
-	TSTR buf;
-
-	pXMLDoc->createNode(CComVariant(NODE_ELEMENT), CComBSTR(_T("Faces")), NULL, &faceData);
-	int numFaces = gm->GetNumberOfFaces();
-	buf.printf(_T("%d"),numFaces);
-	AddXMLAttribute(faceData,_T("Count"),buf.data());
-
-	// Create 'Vertices' element to declare vertex positions
-	CreateXMLNode(pXMLDoc,geomData,_T("Vertices"),&vertData);
-	int numVerts = gm->GetNumberOfVerts();
-	buf.printf(_T("%d"),numVerts);
-	AddXMLAttribute(vertData,_T("Count"),buf.data());
-	
-	// WARNING: the order of creation of the text nodes is important to match
-	// the schema. First vertices, then normals, etc
-
-	// Create 'vertices' element of 'Faces' element to declare vertex indices
-	CComPtr<IXMLDOMNode> vertices;
-	CreateXMLNode(pXMLDoc,faceData,_T("FaceVertices"),&vertices);
-	
-
-	// dump Vertices
-	for(int i = 0;i<numVerts;i++)
-	{
-		Point3 v; 
-		if(gm->GetVertex(i,v, (exportObjectSpace != 0)))
-			{
-			buf.printf(_T("%f %f %f "),v.x,v.y,v.z);
-			AddXMLText(pXMLDoc,vertData,buf.data());
-		}
-		}
-			
-	// TODO: Export Vertex selections
-	// TODO: Export Vertex hide
-
-	CComPtr<IXMLDOMNode> normals;
-	if(exportNormals && !exportNormalsPerFace && gm->GetNumberOfNormals() > 0)
-	{
-		// dump Normals
-		CComPtr <IXMLDOMNode> normData;
-		int numNorms = gm->GetNumberOfNormals();
-			CreateXMLNode(pXMLDoc,geomData,_T("Normals"),&normData);
-			buf.printf(_T("%d"),numNorms);
-			AddXMLAttribute(normData,_T("Count"),buf.data());
-
-		// Create 'normals' element of 'Faces' element to declare normal indices
-		CreateXMLNode(pXMLDoc,faceData,_T("FaceNormals"),&normals);
-		
-		for(int i = 0;i<numNorms;i++)
-		{
-			Point3 n;
-			if(gm->GetNormal(i,n, (exportObjectSpace != 0)))
-			{
-				buf.printf(_T("%f %f %f "),n.x,n.y,n.z);
-				AddXMLText(pXMLDoc,normData,buf.data());
-			}
-		}
-	}
-
-	// TODO: Export Vertex weights
-	// TODO: Export soft selection
-
-	Tab<int> matidTab = gm->GetActiveMatIDs();
-	CComPtr<IXMLDOMNode> matids;
-
-	if (matidTab.Count() > 0)
-		{
-		CreateXMLNode(pXMLDoc,faceData,_T("MaterialIDs"),&matids);
-	}
-
-	Tab <DWORD> smgrps = gm->GetActiveSmgrps();
-	CComPtr<IXMLDOMNode> smgroups;
-	if( smgrps.Count() > 0)
-		CreateXMLNode(pXMLDoc,faceData,_T("SmoothingGroups"),&smgroups);
-
-	CComPtr<IXMLDOMNode> edges;
-	CreateXMLNode(pXMLDoc,faceData,_T("EdgeVisibility"),&edges);
-
-	// dump Face data
-	geomData->appendChild(faceData,NULL);
-	for(int n=0;n<numFaces;n++)
-	{
-		FaceEx* f = gm->GetFace(n);
-
-		if(vertices != NULL) {
-			buf.printf(_T(" %d %d %d"), f->vert[0], f->vert[1], f->vert[2]);
-			AddXMLText(pXMLDoc,vertices,buf.data());
-		}
-
-		if(normals != NULL) {
-			buf.printf(_T(" %d %d %d"), f->norm[0], f->norm[1], f->norm[2]);
-			AddXMLText(pXMLDoc,normals,buf.data());
-			}
-
-		if(smgroups != NULL) {
-			buf.printf(_T(" %u"),(unsigned int)f->smGrp);
-			AddXMLText(pXMLDoc,smgroups,buf.data());
-		}
-
-		if(matids != NULL) {
-			buf.printf(_T(" %d"), f->matID);
-			AddXMLText(pXMLDoc,matids,buf.data());
-		}
-		
-		if(edges != NULL) {
-			buf.printf(_T(" %d %d %d"), f->edgeVis[0], f->edgeVis[1], f->edgeVis[2] );
-			AddXMLText(pXMLDoc,edges,buf.data());
-		}
-        
-
-
-
-		// TODO: Export Face selection data
-		// TODO: Export Face hide
-		// TODO: Export edge selection
-		
-	}
-
-	if(exportMappingChannel)
-	{
-		Tab<int> mapNums = gm->GetActiveMapChannelNum();
-		int mapCount = mapNums.Count();
-
-		if( mapCount > 0)
-		{
-		TSTR data;
-		CComPtr <IXMLDOMNode> channelNode;
-		CreateXMLNode(pXMLDoc,geomData,_T("MapChannels"),&channelNode);
-		buf.printf(_T("%d"),mapCount);
-		AddXMLAttribute(channelNode,_T("Count"),buf.data());
-
-		for(int i=0;i < mapCount;i++)
-		{
-			CComPtr <IXMLDOMNode> channelItem, mvertData,vert,mfaceData,face;
-			CreateXMLNode(pXMLDoc,channelNode,_T("MapChannel"),&channelItem);
-			buf.printf(_T("%d"),mapNums[i]);
-				AddXMLAttribute(channelItem,_T("ID"),buf.data());
-				AddXMLAttribute(channelItem,_T("Type"),_T("Texture"));
-			// TODO: Implement name attribute for channel
-
-			CreateXMLNode(pXMLDoc,channelItem,_T("MapVertices"),&mvertData);
-			int vCount = gm->GetNumberOfMapVerts(mapNums[i]);
-			buf.printf(_T("%d"),vCount);
-			AddXMLAttribute(mvertData,_T("Count"),buf.data());
-			// TODO: Set proper map vertices dimension
-//			int vDim = gm->GetDimensionOfMapVerts(mapNums[i]);
-//			buf.printf("%d",vDim);
-			AddXMLAttribute(mvertData,_T("Dimension"),_T("3"));
-
-			for(int j=0;j<vCount;j++)
-			{
-				Point3 v;
-				if(gm->GetMapVertex(mapNums[i],j,v))
-				{
-					data.printf(_T("%f %f %f"),v.x,v.y,v.z);
-					AddXMLText(pXMLDoc,mvertData,data.data());
-				}
-		
-			}
-
-			CreateXMLNode(pXMLDoc,channelItem,_T("MapFaces"),&mfaceData);
-			int fCount = gm->GetNumberOfFaces();
-			buf.printf(_T("%d"),fCount);
-			AddXMLAttribute(mfaceData,_T("Count"),buf.data());
-
-			for(int k=0;k<fCount;k++)
-			{
-				DWORD  v[3];
-				gm->GetMapFaceIndex(mapNums[i],k,v);
-				data.printf(_T("%d %d %d"),v[0],v[1],v[2]);
-				AddXMLText(pXMLDoc,mfaceData,data.data());
-				}
-			}
-		}
-
-	}
-
-#if 0
-//test code
-	Tab<int> matids;
-
-	matids = gm->GetActiveMatIDs();
-
-	for(i=0;i<matids.Count();i++)
-	{
-		Tab<FaceEx*> faces;
-
-		faces = gm->GetFacesFromMatID(matids[i]);
-
-		for(int k=0; k<faces.Count();k++)
-		{
-			IGameMaterial * faceMat = gm->GetMaterialFromFace(faces[k]);
-//			TSTR name(faceMat->GetMaterialName());
-		}
-		for(k=0;k<gm->GetNumberOfFaces();k++)
-		{
-			IGameMaterial * faceMat = gm->GetMaterialFromFace(k);
-		}
-		
-	}
-
-	Tab <DWORD> smgrps = gm->GetActiveSmgrps();
-#endif
-
-*/

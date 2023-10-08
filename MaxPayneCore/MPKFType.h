@@ -1,5 +1,13 @@
 #pragma once
 #include <cstdint>
+#include "MPType.h"
+#include <vector>
+
+struct MPKFMesh {
+    std::vector<MPVector3> Vertices;
+    std::vector<MPVector3> Normals;
+    std::vector<uint32_t> VerticesPerPrimitive;
+};
 
 /*
 struct MPKFTypeTexture

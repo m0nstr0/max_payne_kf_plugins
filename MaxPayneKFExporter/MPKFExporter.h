@@ -67,9 +67,13 @@ public:
 
 	int	DoExport(const MCHAR *name,ExpInterface *ei,Interface *i, BOOL suppressPrompts=FALSE, DWORD options=0) override;
 
+	bool DoExportNodes(class MPMemoryWriter& MemoryWriter);
+
 	MPKFExporterOptions* GetExportOptions() { return &ExportOptions; }
 
-	bool DoExportMesh(class IGameMesh* Mesh);
+	bool DoExportNode(class IGameNode* Node, class MPMemoryChunkWriter* ChunkWriter);
+
+	bool DoExportMesh(class IGameNode* Node, class IGameMesh* Mesh, class MPMemoryChunkWriter* ChunkWriter);
 
 	bool DoExportMaterials(class MPMemoryWriter& MemoryWriter, const TSTR& CopyDirTo);
 
