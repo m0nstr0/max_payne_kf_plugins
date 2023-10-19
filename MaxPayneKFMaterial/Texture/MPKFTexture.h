@@ -18,6 +18,7 @@
 
 #define MPKFTexture_CLASS_ID	Class_ID(0x35bb1f36, 0x2a4a7430)
 #define MPKFTexture_PBLOCK_REF	0
+#define MPKFTexture_BITMAP_REF	1
 
 class MPKFTexture;
 
@@ -38,10 +39,6 @@ public:
 	MPKFTexture();
 
 	virtual ~MPKFTexture();
-
-	void Init();
-
-	void InitSampler();
 
 	void ShowBitmapProxyPrecacheDialog();
 
@@ -125,7 +122,7 @@ public:
 	TSTR SubAnimName(int i, bool localized) override;
 
 	// TODO: Maintain the number or references here
-	int NumRefs() override { return 1; }
+	int NumRefs() override { return 2; }
 
 	RefTargetHandle GetReference(int i) override;
 
@@ -142,7 +139,7 @@ public:
 
 	virtual int32_t GetTexturesCount() override;
 
-	virtual const MCHAR* GetTextureFileName(int32_t TextureIndex) override;
+	virtual const TSTR GetTextureFileName(int32_t TextureIndex) override;
 
 	virtual int32_t GetMipMapsNum() override;
 
@@ -166,9 +163,11 @@ protected:
 private:
 	static MPKFTextureDlgProc* TextureDlgProc;
 
+	PBBitmap* ParamBitmap;
+
 	BitmapInfo ActiveBitmapInfo;
 
-	Bitmap* ActiveBitmap;
+	class Bitmap* ActiveBitmap;
 
 	MPKFTextureBitmapNotify BitmapNotify;
 
@@ -190,11 +189,7 @@ private:
 
 	BOOL IsRandomFrameStart;
 
-	//UVGen* uvGen; // ref 0
-
 	IParamBlock2* pblock; // ref 1
-
-	//Texmap* subtex[MPKFTexture_NSUBTEX]; // Other refs
 
 	Interval ivalid;
 };

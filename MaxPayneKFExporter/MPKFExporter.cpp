@@ -13,25 +13,48 @@
 #include <set>
 #include <vector>
 #include <map>
-#include <MPKFType.h>
+#include <format>
+#include <string>
+#include <CS/Phyexp.h>
 
-#define WRITE_ASCII_STRING(VariableName, MCharString, Writer)	\
-	TSTR VariableName = TSTR(MCharString);						\
-	if (!IsASCII(VariableName.data())) {						\
-		return false;											\
-	}															\
-	CStr VariableName##Asc = VariableName.ToCStr();				\
+#define MPKFEXPORTER_ERROR_UNSUPORTED_MATERIAL				_T("Material \"{}\" has unsupported class \"{}\", only KF Materials and Multi/Sub-Object are allowed")
+#define MPKFEXPORTER_ERROR_UNSUPORTED_TEXTURE				_T("Texture \"{}\" has unsupported class \"{}\", only KF Textures are allowed")
+#define MPKFEXPORTER_ERROR_STRING_CONTAINS_NON_ASCII		_T("String \"{}\" contains non-ASCII characters, only english characters are allowed")
+#define	MPKFEXPORTER_ERROR_TEXTURE_EMPTY					_T("There is no texture in the slot \"{}\" in the material \"{}\"")
+#define	MPKFEXPORTER_ERROR_TEXTURE_EMPTY_BITMAP				_T("There is no bitmap in the texture \"{}\"")
+#define	MPKFEXPORTER_ERROR_MATERIAL_WRONG_TARGET			_T("Export target is \"{}\" but the material's \"{}\" target is \"{}\"")
+#define	MPKFEXPORTER_ERROR_MESH_TRIANGULATE					_T("Unable to triangulate mesh \"{}\"")
+#define MPKFEXPORTER_ERROR_TEXTURE_START_FRAME				_T("Texture \"{}\" has only \"{}\" frames but the field Start Frame is set to \"{}\"")
+#define MPKFEXPORTER_ERROR_UNSUPPORTED_OBJECTS				_T("The scene has an unsupported object \"{}\"")
+#define MPKFEXPORTER_ERROR_OBJECTS_WITHOUT_MATERIAL			_T("Object \"{}\" doesn't have any material")
+#define MPKFEXPORTER_ERROR_MP2_SKIN_BONES_NUM				_T("Max Payne 2: Object \"{}\" has more that 4 bones per vertex")
+#define MPKFEXPORTER_ERROR_MP1_SKIN_BONES_NUM				_T("Max Payne 1: Object \"{}\" has more that 3 bones per vertex")
+#define MPKFEXPORTER_ERROR_SKIN_FREE_VERTEX					_T("There are some vertices have zero weight sum \"{}\"")
+#define MPKFEXPORTER_ERROR_SKIN_NULL_BONE					_T("Bone with index \"{}\" not found")
+#define MPKFEXPORTER_ERROR_SKIN_NULL_BONES					_T("There are no bones")
+#define MPKFEXPORTER_ERROR_SKIN_MORE_THAN_ONE_ROOT			_T("There are more than one root bone")
+
+#define MPKFEXPORTER_ERROR_HIERARCHY_HIDDEN_HAS_CHILD		_T("Texture \"{}\" has only \"{}\" frames but the field Start Frame is set to \"{}\"")
+#define MPKFEXPORTER_ERROR_HIERARCHY_HIDDEN_HAS_CHILD		_T("Texture \"{}\" has only \"{}\" frames but the field Start Frame is set to \"{}\"")
+#define MPKFEXPORTER_ERROR_UNSUPPORTED_OBJECT_HAS_CHILD		_T("Texture \"{}\" has only \"{}\" frames but the field Start Frame is set to \"{}\"")
+
+#define SHOW_ERROR(Error, ...)																							\
+	MaxSDK::MaxMessageBox(GetMaxHWND(), (std::format(Error, __VA_ARGS__)).c_str(), _T("Error"), MB_OK | MB_ICONERROR);
+
+#define WRITE_ASCII_STRING(VariableName, MCharString, Writer)									\
+	TSTR VariableName = TSTR(MCharString);														\
+	if (!IsASCII(VariableName.data())) {														\
+		SHOW_ERROR(MPKFEXPORTER_ERROR_STRING_CONTAINS_NON_ASCII, VariableName.data());			\
+		return false;																			\
+	}																							\
+	CStr VariableName##Asc = VariableName.ToCStr();												\
 	*Writer << MPString(VariableName##Asc.data(), VariableName##Asc.Length());	
 
-#define MPKFEXPORTER_ERROR_NONE		0
-#define MPKFEXPORTER_ERROR_NONE1	0
-#define MPKFEXPORTER_ERROR_NONE2	0
-#define MPKFEXPORTER_ERROR_NONE3	0
-#define MPKFEXPORTER_ERROR_NONE4	0
-#define MPKFEXPORTER_ERROR_NONE5	0
-#define MPKFEXPORTER_ERROR_NONE6	0
-#define MPKFEXPORTER_ERROR_NONE7	0
-#define MPKFEXPORTER_ERROR_NONE8	0
+#define IS_ASCII_STRING(MCharString)															\
+	if (!IsASCII(MCharString)) {																\
+		SHOW_ERROR(MPKFEXPORTER_ERROR_STRING_CONTAINS_NON_ASCII, MCharString);					\
+		return false;																			\
+	}																							
 
 bool IsASCII(const MCHAR* Str, size_t Length = -1)
 {
@@ -48,11 +71,48 @@ bool IsASCII(const MCHAR* Str, size_t Length = -1)
 	return true;
 }
 
-MPKFExporter::MPKFExporter(): 
-	ExportOptions()
+struct MPKFMeshExporterContext
 {
+	std::vector<MPVector3> MeshVertices;
+	std::vector<int> MeshMaxVertexIndex;
+	std::vector<MPVector2> MeshTexVertices;
+	std::vector<MPVector3> MeshNormals;
+	std::vector<uint16_t> MeshIndices;
+	std::vector<uint32_t> MeshVerticesPerPrimitive;
+	std::vector<uint32_t> MeshIndicesPerPrimitive;
+	std::vector<IGameMaterial*> MaterialPerPrimitive;
+	TSTR SkinObjectName;
+	bool HasSkin;
+	std::vector<TSTR> SkinBoneNames;
+	std::vector<int> SkinBonesNumPerVertex;
+	std::vector<float> SkinWeightsPerVertex;
+	std::vector<int> SkinBonesIDsPerVertex;
+	std::vector<int> SkinVertexOffset;
+};
 
-}
+struct MPKFNodeInfo
+{
+	IGameNode* Node;
+	IGameNode* ParentNode;
+	bool Export;
+	IGameObject::ObjectTypes Type;
+};
+
+struct MPKFGlobalExporterContext
+{
+	MPMemoryWriter TargetMemoryWriter;
+	MPMemoryWriter OtherMemoryWriter;
+	MPMemoryWriter MaterialMemoryWriter;
+	std::vector<IGameMaterial*> Materials;
+	std::vector<MPKFNodeInfo> Nodes;
+	bool ExportSelected;
+};
+
+MPKFExporter::MPKFExporter() :
+	ExportOptions(),
+	MaxHWND{ nullptr },
+	IGameExporter{ nullptr }
+{}
 
 MPKFExporter::~MPKFExporter()
 {
@@ -87,6 +147,9 @@ INT_PTR CALLBACK KFExportDlgProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 			SampleValueSpin->SetLimits(1, 500, TRUE);
 			SampleValueSpin->SetScale(1);
 			SampleValueSpin->SetValue(30, FALSE);
+			//<=== USUPORTED
+			SampleValueSpin->Enable(FALSE);
+			//<=== USUPORTED
 			ReleaseISpinner(SampleValueSpin);
 
 			StartFrameSpin = GetISpinner(GetDlgItem(hWnd, IDC_KF_EXPORTER_START_FRAME_SPIN));
@@ -94,6 +157,9 @@ INT_PTR CALLBACK KFExportDlgProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 			StartFrameSpin->SetLimits(0, 100, TRUE);
 			StartFrameSpin->SetScale(1);
 			StartFrameSpin->SetValue(0, FALSE);
+			//<=== USUPORTED
+			StartFrameSpin->Enable(FALSE);
+			//<=== USUPORTED
 			ReleaseISpinner(StartFrameSpin);
 
 			EndFrameSpin = GetISpinner(GetDlgItem(hWnd, IDC_KF_EXPORTER_END_FRAME_SPIN));
@@ -101,6 +167,9 @@ INT_PTR CALLBACK KFExportDlgProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 			EndFrameSpin->SetLimits(0, 100, TRUE);
 			EndFrameSpin->SetScale(1);
 			EndFrameSpin->SetValue(100, FALSE);
+			//<=== USUPORTED
+			EndFrameSpin->Enable(FALSE);
+			//<=== USUPORTED
 			ReleaseISpinner(EndFrameSpin);
 
 			MinPosSpin = GetISpinner(GetDlgItem(hWnd, IDC_KF_EXPORTER_MIN_POS_SPIN));
@@ -108,6 +177,9 @@ INT_PTR CALLBACK KFExportDlgProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 			MinPosSpin->SetLimits(0.f, 100.f, TRUE);
 			MinPosSpin->SetScale(0.1f);
 			MinPosSpin->SetValue(0.001f, FALSE);
+			//<=== USUPORTED
+			MinPosSpin->Enable(FALSE);
+			//<=== USUPORTED
 			ReleaseISpinner(MinPosSpin);
 			
 			MinRotSpin = GetISpinner(GetDlgItem(hWnd, IDC_KF_EXPORTER_MIN_ROT_SPIN));
@@ -115,6 +187,9 @@ INT_PTR CALLBACK KFExportDlgProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 			MinRotSpin->SetLimits(0.f, 100.f, TRUE);
 			MinRotSpin->SetScale(0.1f);
 			MinRotSpin->SetValue(0.001f, FALSE);
+			//<=== USUPORTED
+			MinRotSpin->Enable(FALSE);
+			//<=== USUPORTED
 			ReleaseISpinner(MinRotSpin);
 
 			LoopToFrameSpin = GetISpinner(GetDlgItem(hWnd, IDC_KF_EXPORTER_LOOP_TO_FRAME_SPIN));
@@ -122,6 +197,9 @@ INT_PTR CALLBACK KFExportDlgProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 			LoopToFrameSpin->SetLimits(0, 100, TRUE);
 			LoopToFrameSpin->SetScale(1);
 			LoopToFrameSpin->SetValue(0, FALSE);
+			//<=== USUPORTED
+			LoopToFrameSpin->Enable(FALSE);
+			//<=== USUPORTED
 			ReleaseISpinner(LoopToFrameSpin);
 
 			SendMessage(GetDlgItem(hWnd, IDC_KF_EXPORTER_INTERPOLATION_VALUE), CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(_T("None")));
@@ -149,6 +227,48 @@ INT_PTR CALLBACK KFExportDlgProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 			EnableWindow(GetDlgItem(hWnd, IDC_KF_EXPORTER_LOOP_INTERP), FALSE);
 			EnableWindow(GetDlgItem(hWnd, IDC_KF_EXPORTER_LOOP_DEC_FRAME), FALSE);
 			EnableWindow(GetDlgItem(hWnd, IDC_KF_EXPORTER_MAINTAIN_MATRIX), FALSE);
+
+			Edit_SetText(GetDlgItem(hWnd, IDC_KF_EXPORTER_SKINNING_POSTFIX), _T("_skin.skd"));
+
+			//Start unsupporter stuff
+			EnableWindow(GetDlgItem(hWnd, IDC_KF_EXPORTER_LOOP_INTERP), FALSE);
+			EnableWindow(GetDlgItem(hWnd, IDC_KF_EXPORTER_LOOP_DEC_FRAME), FALSE);
+
+			Button_SetCheck(GetDlgItem(hWnd, IDC_KF_EXPORTER_MAINTAIN_MATRIX), FALSE);
+			EnableWindow(GetDlgItem(hWnd, IDC_KF_EXPORTER_MAINTAIN_MATRIX), FALSE);
+
+			EnableWindow(GetDlgItem(hWnd, IDC_KF_EXPORTER_INTERPOLATION_VALUE), FALSE);
+
+			Button_SetCheck(GetDlgItem(hWnd, IDC_KF_EXPORTER_USE_GLOBAL_ANIMATION), FALSE);
+			EnableWindow(GetDlgItem(hWnd, IDC_KF_EXPORTER_USE_GLOBAL_ANIMATION), FALSE);
+
+			Button_SetCheck(GetDlgItem(hWnd, IDC_KF_EXPORTER_LOOP), FALSE);
+			EnableWindow(GetDlgItem(hWnd, IDC_KF_EXPORTER_LOOP), FALSE);
+
+			Button_SetCheck(GetDlgItem(hWnd, IDC_KF_EXPORTER_SAVE_REFS), FALSE);
+			EnableWindow(GetDlgItem(hWnd, IDC_KF_EXPORTER_SAVE_REFS), FALSE);
+
+			Button_SetCheck(GetDlgItem(hWnd, IDC_KF_EXPORTER_USE_PIVOT), FALSE);
+			EnableWindow(GetDlgItem(hWnd, IDC_KF_EXPORTER_USE_PIVOT), FALSE);
+
+			Button_SetCheck(GetDlgItem(hWnd, IDC_KF_EXPORTER_FLOATING_VERTICES), FALSE);
+			EnableWindow(GetDlgItem(hWnd, IDC_KF_EXPORTER_FLOATING_VERTICES), FALSE);
+			
+			Button_SetCheck(GetDlgItem(hWnd, IDC_KF_EXPORTER_ANIMATIONS), FALSE);
+			EnableWindow(GetDlgItem(hWnd, IDC_KF_EXPORTER_ANIMATIONS), FALSE);
+
+			Button_SetCheck(GetDlgItem(hWnd, IDC_KF_EXPORTER_CAMERAS), FALSE);
+			EnableWindow(GetDlgItem(hWnd, IDC_KF_EXPORTER_CAMERAS), FALSE);
+
+			Button_SetCheck(GetDlgItem(hWnd, IDC_KF_EXPORTER_LIGHTS), FALSE);
+			EnableWindow(GetDlgItem(hWnd, IDC_KF_EXPORTER_LIGHTS), FALSE);
+
+			Button_SetCheck(GetDlgItem(hWnd, IDC_KF_EXPORTER_ENVIRONMENT), FALSE);
+			EnableWindow(GetDlgItem(hWnd, IDC_KF_EXPORTER_ENVIRONMENT), FALSE);
+
+			Button_SetCheck(GetDlgItem(hWnd, IDC_KF_EXPORTER_HELPERS), FALSE);
+			EnableWindow(GetDlgItem(hWnd, IDC_KF_EXPORTER_HELPERS), FALSE);
+			//End unsuported stuff
 
 			return TRUE;
 		case WM_COMMAND:
@@ -179,21 +299,21 @@ INT_PTR CALLBACK KFExportDlgProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 			case IDC_KF_EXPORTER_SCALE:
 				if (IsDlgButtonChecked(hWnd, IDC_KF_EXPORTER_SCALE) == BST_CHECKED) {
 					ScaleValueSpin = GetISpinner(GetDlgItem(hWnd, IDC_KF_EXPORTER_SCALE_SPIN));
-					ScaleValueSpin->Enable(FALSE);
+					ScaleValueSpin->Enable(TRUE);
 					ReleaseISpinner(ScaleValueSpin);
 				}
 				else {
 					ScaleValueSpin = GetISpinner(GetDlgItem(hWnd, IDC_KF_EXPORTER_SCALE_SPIN));
-					ScaleValueSpin->Enable(TRUE);
+					ScaleValueSpin->Enable(FALSE);
 					ReleaseISpinner(ScaleValueSpin);
 				}
 				return TRUE;
-			case IDC_KF_EXPORTER_GEOMETRY:
-				if (IsDlgButtonChecked(hWnd, IDC_KF_EXPORTER_GEOMETRY) == BST_CHECKED) {
-					EnableWindow(GetDlgItem(hWnd, IDC_KF_EXPORTER_SKINNING), TRUE);
+			case IDC_KF_EXPORTER_SKINNING:
+				if (IsDlgButtonChecked(hWnd, IDC_KF_EXPORTER_SKINNING) == BST_CHECKED) {
+					EnableWindow(GetDlgItem(hWnd, IDC_KF_EXPORTER_SKINNING_POSTFIX), TRUE);
 				}
 				else {
-					EnableWindow(GetDlgItem(hWnd, IDC_KF_EXPORTER_SKINNING), FALSE);
+					EnableWindow(GetDlgItem(hWnd, IDC_KF_EXPORTER_SKINNING_POSTFIX), FALSE);
 				}
 				return TRUE;
 			case IDOK: {
@@ -207,7 +327,6 @@ INT_PTR CALLBACK KFExportDlgProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 				Options->ExportEnvironmets = IsDlgButtonChecked(hWnd, IDC_KF_EXPORTER_ENVIRONMENT) == BST_CHECKED;
 				Options->ExportHelpers = IsDlgButtonChecked(hWnd, IDC_KF_EXPORTER_HELPERS) == BST_CHECKED;
 				Options->Scale = IsDlgButtonChecked(hWnd, IDC_KF_EXPORTER_SCALE) == BST_CHECKED;
-				Options->ExportHelpers = IsDlgButtonChecked(hWnd, IDC_KF_EXPORTER_HELPERS) == BST_CHECKED;
 				Options->CopyTexturesToExportPath = IsDlgButtonChecked(hWnd, IDC_KF_EXPORTER_COPY_TEXTURES) == BST_CHECKED;
 				Options->RetainHierarchies = IsDlgButtonChecked(hWnd, IDC_KF_EXPORTER_RETAIN_HIERARCHIES) == BST_CHECKED;
 				Options->UsePivotAsMeshCenter = IsDlgButtonChecked(hWnd, IDC_KF_EXPORTER_USE_PIVOT) == BST_CHECKED;
@@ -216,7 +335,7 @@ INT_PTR CALLBACK KFExportDlgProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 				Options->RemoveHiddenObjects = IsDlgButtonChecked(hWnd, IDC_KF_EXPORTER_HIDDEN_OBJECTS) == BST_CHECKED;
 				Options->UsePivotAsMeshCenter = IsDlgButtonChecked(hWnd, IDC_KF_EXPORTER_USE_PIVOT) == BST_CHECKED;
 				Options->Game = IsDlgButtonChecked(hWnd, IDC_KF_EXPORTER_MP1) == BST_CHECKED ? 0 : 1;
-
+				Options->ExportSkeleton = IsDlgButtonChecked(hWnd, IDC_KF_EXPORTER_SKELETON) == BST_CHECKED;
 				ScaleValueSpin = GetISpinner(GetDlgItem(hWnd, IDC_KF_EXPORTER_SCALE_SPIN));
 				Options->ScaleValue = ScaleValueSpin->GetFVal();
 				ReleaseISpinner(ScaleValueSpin);
@@ -257,9 +376,7 @@ INT_PTR CALLBACK KFExportDlgProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 				else {
 					Options->FrameToFrameRotationInterpolation = 0;
 				}
-
-				//ComboBox_GetCurSel
-				
+			
 				LRESULT TexturePathStringLen = ComboBox_GetTextLength(GetDlgItem(hWnd, IDC_KF_EXPORTER_PATHS));
 				TCHAR* ComboboxText = new TCHAR[TexturePathStringLen + 1];
 				ComboBox_GetText(GetDlgItem(hWnd, IDC_KF_EXPORTER_PATHS), ComboboxText, TexturePathStringLen + 1);
@@ -267,6 +384,16 @@ INT_PTR CALLBACK KFExportDlgProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 
 				if (!IsASCII(Options->Paths.data())) {
 					MaxSDK::MaxMessageBox(hWnd, _T("Path contains non-ASCII characters, only english characters is allowed"), _T("Error"), MB_OK | MB_ICONERROR);
+					break;
+				}
+
+				LRESULT SkinningPathStringLen = Edit_GetTextLength(GetDlgItem(hWnd, IDC_KF_EXPORTER_SKINNING_POSTFIX));
+				TCHAR* SkinningText = new TCHAR[SkinningPathStringLen + 1];
+				ComboBox_GetText(GetDlgItem(hWnd, IDC_KF_EXPORTER_SKINNING_POSTFIX), SkinningText, SkinningPathStringLen + 1);
+				Options->SkinningPostfix = TSTR(SkinningText);
+
+				if (Options->SkinningPostfix.Length() == 0 || !IsASCII(Options->SkinningPostfix.data())) {
+					MaxSDK::MaxMessageBox(hWnd, _T("Skin file postfix contains non-ASCII characters or empty, only english characters is allowed"), _T("Error"), MB_OK | MB_ICONERROR);
 					break;
 				}
 
@@ -289,202 +416,230 @@ int MPKFExporter::DoExport(const MCHAR *name, ExpInterface *ei, Interface *i, BO
 {
 	MaxHWND = i->GetMAXHWnd();
 
+	ExportOptions.ResetToDefault();
+
     if (!DialogBoxParam(hInstance, MAKEINTRESOURCE(IDD_KF_EXPORTER_DIALOG), MaxHWND, KFExportDlgProc, (LPARAM)this)) {
 		return IMPEXP_CANCEL;
 	}
 
-    pIgame = GetIGameInterface();
+	MPKFGlobalExporterContext GlobalContext{};
+
+	GlobalContext.ExportSelected = (options & SCENE_EXPORT_SELECTED) ? true : false;
+
+    IGameExporter = GetIGameInterface();
 
 	IGameConversionManager* cm = GetConversionManager();
 	cm->SetCoordSystem(IGameConversionManager::CoordSystem::IGAME_D3D);
 
-	pIgame->InitialiseIGame(false);
-	pIgame->SetStaticFrame(0);
+	IGameExporter->InitialiseIGame(GlobalContext.ExportSelected);
+	IGameExporter->SetStaticFrame(0);
 
 	TSTR FilePath, FileName, FileExt;
 	SplitFilename(TSTR(name), &FilePath, &FileName, &FileExt);
 
-	MPMemoryWriter MemoryWriter;
-
-	if (!DoExportMaterials(MemoryWriter, FilePath)) {
-		return IMPEXP_FAIL;
-	}
-
-	if (!DoExportNodes(MemoryWriter)) {
-		return IMPEXP_FAIL;
-	}
-
-	FILE* OutputFile = _tfopen(name, _T("wb"));
-
-	fwrite(MemoryWriter.GetData(), MemoryWriter.GetSize(), 1, OutputFile);
-
-	fclose(OutputFile);
-
-	return IMPEXP_SUCCESS;
-
-    //int TopLevelNodesNum = pIgame->GetTopLevelNodeCount();
-
-	//for (int TopLevelNodeIndex{ 0 }; TopLevelNodeIndex < TopLevelNodesNum; TopLevelNodeIndex++)
-	//{
-	//	IGameNode* Node = pIgame->GetTopLevelNode(TopLevelNodeIndex);
-		//MCHAR* NodeName = Node->GetName();
-	//	IGameObject* obj = Node->GetIGameObject();
-	//}
-        //
-       // 
-       // 
-
-       // switch(obj->GetIGameType())
-		//{
-           // case IGameObject::IGAME_MESH: {
-               // IGameMesh * gM = (IGameMesh*)obj;
-				//gM->SetCreateOptimizedNormalList();
-					//if(gM->InitializeData())
-					//{
-						//CreateXMLNode(pXMLDoc,parent,_T("Mesh"),&geomData);
-						//if(splitFile)
-						//{
-						//	TSTR filename;
-						//	MakeSplitFilename(child,filename);
-							
-						//	AddXMLAttribute(geomData, _T("Include"),filename.data());
-						//	CreateXMLNode(pSubDocMesh,pSubMesh,_T("Mesh"),&subMeshNode);
-						//	AddXMLAttribute(subMeshNode,_T("Node"),child->GetName());
-						//	geomData = subMeshNode;
-
-						//}
-						//DumpMesh(gM,geomData);
-					//}
-           // }
-        //}
-
-       // Node->ReleaseIGameObject();
-        //MCHAR * 	GetName ()=0
-        /*
-        virtual GMatrix 	GetWorldTM (TimeValue t=TIME_NegInfinity)=0
-     	Get World TM.
- 
-        virtual GMatrix 	GetLocalTM (TimeValue t=TIME_NegInfinity)=0
- 	    Get Local TM.
- 
-        virtual GMatrix 	GetObjectTM (TimeValue t=TIME_NegInfinity)=0
-
-        virtual IGameNode * 	GetNodeParent ()=0
-        Get the nodes parent.
-    
-        virtual int 	GetChildCount ()=0
-            Get the number of direct children to the parent.
-        
-        virtual IGameNode * 	GetNodeChild (int index)=0
-            Access the n'th child node of the parent node.
-            virtual int 	GetMaterialIndex ()=0
-            Get the material index.
-        
-        virtual IGameMaterial * 	GetNodeMaterial ()=0
-            Get the material.
-        
-        virtual IPoint3 & 	GetWireframeColor ()=0
-            Get the wireframe color.
-        
-        virtual bool 	IsTarget ()=0
-            Check if a Target Node
-
-        
-        virtual bool 	IsGroupOwner ()=0
-            Check if a Group Head.
-        
-        virtual bool 	IsNodeHidden ()=0
-            Check if the node hidden.
-
-            irtual IGameObject * 	GetIGameObject ()=0
-            Get the actual object.
-        
-        virtual void 	ReleaseIGameObject ()=0
-        Release the IGameObject obtained from GetIGameObject.
-        */
-
-    //}
-    
-    //IGameMaterial * 	GetIGameMaterial (Mtl *mat)=0
-    //virtual IGameTextureMap * 	GetIGameTextureMap (Texmap *texMap)=0
- 
-    //pIgame->ReleaseIGame();
- 	
-    return IMPEXP_SUCCESS;
-}
-
-bool MPKFExporter::DoExportNodes(MPMemoryWriter& MemoryWriter)
-{
-	const int TopLevelNodesNum = pIgame->GetTopLevelNodeCount();
+	const int TopLevelNodesNum = IGameExporter->GetTopLevelNodeCount();
 
 	for (int TopLevelNodeIndex{ 0 }; TopLevelNodeIndex < TopLevelNodesNum; TopLevelNodeIndex++)
 	{
-		IGameNode* Node = pIgame->GetTopLevelNode(TopLevelNodeIndex);
+		IGameNode* Node = IGameExporter->GetTopLevelNode(TopLevelNodeIndex);
 
-		IGameObject* GameObject = Node->GetIGameObject();
-		IGameObject::ObjectTypes ObjectType = GameObject->GetIGameType();
+		if (!PrepareNodesList(Node, &GlobalContext)) {
+			return IMPEXP_FAIL;
+		}
+	}
 
-		if (ObjectType == IGameObject::IGAME_MESH) {
-			IGameMesh* Mesh = (IGameMesh*)GameObject;
-			std::unique_ptr<MPMemoryChunkWriter> MeshChunk{ MemoryWriter.CreateChunk(0x0C, MPKFTYPE_MESH_CHUNK_ID, 2) };
-			if (!DoExportMesh(Node, Mesh, MeshChunk.get())) {
-				Node->ReleaseIGameObject();
-				return false;
-			}
-			MemoryWriter << MeshChunk.get();
-			MeshChunk.reset();
+	if (!DoExportSubNodes(&GlobalContext)) {
+		return IMPEXP_FAIL;
+	}
+
+	if (ExportOptions.ExportMaterials) {
+		if (!DoExportKFMaterials(&GlobalContext, FilePath)) {
+			return IMPEXP_FAIL;
 		}
 
+		GlobalContext.TargetMemoryWriter.Write(GlobalContext.MaterialMemoryWriter.GetData(), GlobalContext.MaterialMemoryWriter.GetSize());
+	}
+
+	GlobalContext.TargetMemoryWriter.Write(GlobalContext.OtherMemoryWriter.GetData(), GlobalContext.OtherMemoryWriter.GetSize());
+
+	FILE* OutputFile = _tfopen(name, _T("wb"));
+
+	fwrite(GlobalContext.TargetMemoryWriter.GetData(), GlobalContext.TargetMemoryWriter.GetSize(), 1, OutputFile);
+
+	fclose(OutputFile);
+
+	MaxSDK::MaxMessageBox(GetMaxHWND(), _T("Exported"), _T("Info"), MB_OK | MB_ICONINFORMATION);
+
+	return IMPEXP_SUCCESS;
+}
+
+IGameNode* MPKFExporter::GetParentNode(IGameNode* Node)
+{
+	IGameNode* ParentNode = Node->GetNodeParent();
+
+	if (!ParentNode) {
+		return nullptr;
+	}
+
+	if (ParentNode->IsNodeHidden() && ExportOptions.RemoveHiddenObjects) {
+		return GetParentNode(ParentNode);
+	}
+
+	if (ParentNode->IsTarget()) {
+		return GetParentNode(ParentNode);
+	}
+
+	if (ParentNode->IsGroupOwner()) {
+		return GetParentNode(ParentNode);
+	}
+
+	return ParentNode;
+}
+
+bool MPKFExporter::PrepareNodesList(IGameNode* Node, MPKFGlobalExporterContext* GlobalContext)
+{
+	bool Export = true;
+
+	if (Node->IsTarget()) {
+		Export = false;
+	}
+
+	IGameNode* ParentNode = GetParentNode(Node);
+	if (Node->IsNodeHidden() && ExportOptions.RemoveHiddenObjects) {
+		Export = false;
+	}
+
+	IGameObject* GameObject = Node->GetIGameObject();
+	IGameObject::ObjectTypes Type = GameObject->GetIGameType();
+
+	switch (Type)
+	{
+	case IGameObject::IGAME_MESH: {
+		if (!ExportOptions.ExportGeometry && !ExportOptions.ExportSkinning) {
+			Export = false;
+		}
+		break;
+	}
+	case IGameObject::IGAME_CAMERA:
+		if (!ExportOptions.ExportCameras) {
+			Export = false;
+		}
+		break;
+	case IGameObject::IGAME_LIGHT:
+		if (!ExportOptions.ExportLights) {
+			Export = false;
+		}
+		break;
+	case IGameObject::IGAME_HELPER:
+		if (!ExportOptions.ExportHelpers) {
+			Export = false;
+		}
+		break;
+	case IGameObject::IGAME_BONE:
+		if (!ExportOptions.ExportSkinning) {
+			Export = false;
+		}
+		break;
+	default:
+		SHOW_ERROR(MPKFEXPORTER_ERROR_UNSUPPORTED_OBJECTS, Node->GetName());
 		Node->ReleaseIGameObject();
+		return false;
+	}
 
-		//Node->GetChildCount();
+	GlobalContext->Nodes.push_back({ Node, ParentNode, Export, Type });
 
-		//! Access the n'th child node of the parent node
-		/*!
-		\param index The index to the child to retrieve
-		\return IGameNode pointer to the child
-		*/
-		//Node->GetNodeChild(int index);
+	Node->ReleaseIGameObject();
 
-		//if (ExportOptions.RemoveHiddenObjects && Node->IsNodeHidden()) {
-		//	continue;
-		//}
-
-		
-		
-		
-				//{
-				   // case IGameObject::IGAME_MESH: {
-					   // IGameMesh * gM = (IGameMesh*)obj;
-						//gM->SetCreateOptimizedNormalList();
-							//if(gM->InitializeData())
-							//{
-								//CreateXMLNode(pXMLDoc,parent,_T("Mesh"),&geomData);
-								//if(splitFile)
-								//{
-								//	TSTR filename;
-								//	MakeSplitFilename(child,filename);
-
-								//	AddXMLAttribute(geomData, _T("Include"),filename.data());
-								//	CreateXMLNode(pSubDocMesh,pSubMesh,_T("Mesh"),&subMeshNode);
-								//	AddXMLAttribute(subMeshNode,_T("Node"),child->GetName());
-								//	geomData = subMeshNode;
-
-								//}
-								//DumpMesh(gM,geomData);
-							//}
-				   // }
+	const int NuberOfSubNodes = Node->GetChildCount();
+	for (int NodeIndex = 0; NodeIndex < NuberOfSubNodes; NodeIndex++) {
+		IGameNode* ChildNode = Node->GetNodeChild(NodeIndex);
+		if (!PrepareNodesList(ChildNode, GlobalContext)) {
+			return false;
+		}
 	}
 
 	return true;
 }
 
-bool MPKFExporter::DoExportNode(IGameNode* Node, MPMemoryChunkWriter* ChunkWriter)
+bool MPKFExporter::DoExportSubNodes(MPKFGlobalExporterContext* GlobalContext)
+{
+	for (const MPKFNodeInfo& NodeInfo : GlobalContext->Nodes) {
+		if (NodeInfo.Export && !DoExportNode(NodeInfo.Node, GlobalContext)) {
+			return false;
+		}
+	}
+	
+	return true;
+}
+
+bool MPKFExporter::DoExportNode(IGameNode* Node, MPKFGlobalExporterContext* GlobalContext)
+{
+	IGameObject* GameObject = Node->GetIGameObject();
+
+	MPKFMeshExporterContext Context{};
+
+	switch (GameObject->GetIGameType())
+	{
+	case IGameObject::IGAME_MESH: {
+		IGameMesh* Mesh = (IGameMesh*)GameObject;
+
+		if (!PrepareKFMeshExportContext(Node, Mesh, GameObject, GlobalContext, &Context)) {
+			return false;
+		}
+	
+		if (ExportOptions.ExportGeometry) {
+			std::unique_ptr<MPMemoryChunkWriter> MeshChunk{ GlobalContext->OtherMemoryWriter.CreateChunk(0x0C, MPKFTYPE_MESH_CHUNK_ID, 2) };
+			if (!DoExportKFMesh(Node, &Context, MeshChunk.get())) {
+				Node->ReleaseIGameObject();
+				return false;
+			}
+			GlobalContext->OtherMemoryWriter << MeshChunk.get();
+			MeshChunk.reset();
+		}
+
+		if (ExportOptions.ExportSkinning) {
+			std::unique_ptr<MPMemoryChunkWriter> SkinChunk{ GlobalContext->OtherMemoryWriter.CreateChunk(0x0C, MPKFTYPE_SKIN_CHUNK_ID, 1) };
+			if (!DoExportKFSkinning(&Context, SkinChunk.get())) {
+				return false;
+			}
+			GlobalContext->OtherMemoryWriter << SkinChunk.get();
+			SkinChunk.reset();
+		}
+		break;
+	}
+	case IGameObject::IGAME_CAMERA:
+		break;
+	case IGameObject::IGAME_LIGHT:
+		break;
+	case IGameObject::IGAME_HELPER:
+		break;
+	case IGameObject::IGAME_BONE: {
+		//std::unique_ptr<MPMemoryChunkWriter> MeshChunk{ GlobalContext->OtherMemoryWriter.CreateChunk(0x0C, MPKFTYPE_MESH_CHUNK_ID, 2) };
+		//if (!DoExportKFMesh(Node, &Context, MeshChunk.get())) {
+		//	return false;
+		//}
+		//GlobalContext->OtherMemoryWriter << MeshChunk.get();
+		//MeshChunk.reset();
+		break;
+	}
+	}
+
+	Node->ReleaseIGameObject();
+
+	bool ExportSkinning{ false };
+	bool ExportMaterials{ false };
+	bool ExportAnimations{ false };
+	bool ExportEnvironmets{ false };
+
+	return true;
+}
+
+bool MPKFExporter::DoExportKFNode(IGameNode* Node, MPMemoryChunkWriter* ChunkWriter)
 {
 	WRITE_ASCII_STRING(NodeName, Node->GetName(), ChunkWriter);
 
 	IGameNode* ParentNode = Node->GetNodeParent();
-	if (ParentNode) {
+	if (ParentNode && ExportOptions.RetainHierarchies) {
 		WRITE_ASCII_STRING(ParentNodeName, ParentNode->GetName(), ChunkWriter);
 	}
 	else {
@@ -501,7 +656,7 @@ bool MPKFExporter::DoExportNode(IGameNode* Node, MPMemoryChunkWriter* ChunkWrite
 
 	*ChunkWriter << NodeMatrix;
 
-	if (ParentNode) {
+	if (ParentNode && ExportOptions.RetainHierarchies) {
 		*ChunkWriter << true;
 	}
 	else {
@@ -513,63 +668,558 @@ bool MPKFExporter::DoExportNode(IGameNode* Node, MPMemoryChunkWriter* ChunkWrite
 	return true;
 }
 
-bool MPKFExporter::DoExportMesh(IGameNode* Node, IGameMesh* Mesh, MPMemoryChunkWriter* ChunkWriter)
+bool MPKFExporter::DoExportKFGeometry(MPKFMeshExporterContext* Context, MPMemoryChunkWriter* ChunkWriter)
+{
+	*ChunkWriter << static_cast<uint32_t>(Context->MeshVertices.size());
+
+	for (const MPVector3& Vertex : Context->MeshVertices) {
+		ChunkWriter->Write(&Vertex.X, sizeof(float));
+		ChunkWriter->Write(&Vertex.Y, sizeof(float));
+		ChunkWriter->Write(&Vertex.Z, sizeof(float));
+	}
+
+	for (const MPVector3& Vertex : Context->MeshNormals) {
+		ChunkWriter->Write(&Vertex.X, sizeof(float));
+		ChunkWriter->Write(&Vertex.Y, sizeof(float));
+		ChunkWriter->Write(&Vertex.Z, sizeof(float));
+	}
+
+	*ChunkWriter << static_cast<uint32_t>(Context->MeshVerticesPerPrimitive.size());
+
+	for (uint32_t NumberVertices : Context->MeshVerticesPerPrimitive) {
+		*ChunkWriter << NumberVertices;
+	}
+
+	return true;
+}
+
+bool MPKFExporter::DoExportKFPolygons(MPKFMeshExporterContext* Context, MPMemoryChunkWriter* ChunkWriter)
+{
+	*ChunkWriter << static_cast<uint32_t>(Context->MeshIndices.size());
+
+	for (const uint16_t Index : Context->MeshIndices) {
+		ChunkWriter->Write(&Index, sizeof(uint16_t));
+	}
+
+	*ChunkWriter << static_cast<uint32_t>(Context->MeshIndicesPerPrimitive.size());
+
+	for (const uint16_t NumIndices : Context->MeshIndicesPerPrimitive) {
+		*ChunkWriter << static_cast<uint32_t>(NumIndices / 3);
+	}
+
+	return true;
+}
+
+bool MPKFExporter::DoExportKFSkinning(MPKFMeshExporterContext* Context, MPMemoryChunkWriter* ChunkWriter)
+{
+	if (!ExportOptions.ExportSkinning || !Context->HasSkin) {
+		return true;
+	}
+
+	ChunkWriter->WriteTag(0x1C);
+	*ChunkWriter << static_cast<int32_t>(1);
+	WRITE_ASCII_STRING(SkinObjectName, Context->SkinObjectName.data(), ChunkWriter);
+
+	ChunkWriter->WriteTag(0x1C);
+	*ChunkWriter << static_cast<int32_t>(Context->SkinBoneNames.size());
+	for (TSTR& BoneName : Context->SkinBoneNames) {
+		WRITE_ASCII_STRING(SkinBoneName, BoneName.data(), ChunkWriter);
+	}
+
+	ChunkWriter->WriteTag(0x1C);
+	*ChunkWriter << static_cast<int32_t>(Context->SkinVertexOffset.size());
+	for (int VertexOffset : Context->SkinVertexOffset) {
+		*ChunkWriter << static_cast<int32_t>(VertexOffset);
+	}
+
+	ChunkWriter->WriteTag(0x1C);
+	*ChunkWriter << static_cast<int32_t>(Context->SkinBonesNumPerVertex.size());
+	for (int BonesNum : Context->SkinBonesNumPerVertex) {
+		*ChunkWriter << static_cast<int32_t>(BonesNum);
+	}
+
+	ChunkWriter->WriteTag(0x1C);
+	*ChunkWriter << static_cast<int32_t>(Context->SkinBonesIDsPerVertex.size());
+	for (int BoneID : Context->SkinBonesIDsPerVertex) {
+		*ChunkWriter << static_cast<int32_t>(BoneID);
+	}
+
+	ChunkWriter->WriteTag(0x1C);
+	*ChunkWriter << static_cast<int32_t>(Context->SkinWeightsPerVertex.size());
+	for (float Weight : Context->SkinWeightsPerVertex) {
+		*ChunkWriter << Weight;
+	}
+
+	ChunkWriter->WriteTag(0x1C);
+	*ChunkWriter << static_cast<int32_t>(Context->MeshVerticesPerPrimitive.size());
+	for (uint32_t VerticesNum : Context->MeshVerticesPerPrimitive) {
+		*ChunkWriter << VerticesNum;
+	}
+
+	ChunkWriter->WriteTag(0x1C);
+	*ChunkWriter << static_cast<int32_t>(Context->MeshVerticesPerPrimitive.size());
+	uint32_t StartVertexIndex = 0;
+	for (uint32_t VerticesNum : Context->MeshVerticesPerPrimitive) {
+		*ChunkWriter << StartVertexIndex;
+		StartVertexIndex += VerticesNum;
+	}
+
+	return true;
+}
+
+bool MPKFExporter::DoExportKFPolygonMaterials(IGameNode* Node, MPKFMeshExporterContext* Context, MPMemoryChunkWriter* ChunkWriter)
+{
+	*ChunkWriter << static_cast<int32_t>(Context->MaterialPerPrimitive.size());
+
+	for (IGameMaterial* Material : Context->MaterialPerPrimitive) {
+		if (Material == nullptr) {
+			SHOW_ERROR(MPKFEXPORTER_ERROR_OBJECTS_WITHOUT_MATERIAL, Node->GetName());
+			return false;
+		}
+		WRITE_ASCII_STRING(MaterialName, Material->GetMaterialName(), ChunkWriter);
+	}
+
+	return true;
+}
+
+bool MPKFExporter::DoExportKFUVWMapping(MPKFMeshExporterContext* Context, MPMemoryChunkWriter* ChunkWriter)
+{
+	*ChunkWriter << static_cast<uint32_t>(0);
+
+	*ChunkWriter << static_cast<uint32_t>(Context->MeshTexVertices.size());
+
+	for (MPVector2& Vertex : Context->MeshTexVertices) {
+		float Z = 0.f;
+		ChunkWriter->Write(&Vertex.X, sizeof(float));
+		ChunkWriter->Write(&Vertex.Y, sizeof(float));
+		ChunkWriter->Write(&Z, sizeof(float));
+	}
+
+	*ChunkWriter << static_cast<uint32_t>(Context->MeshVerticesPerPrimitive.size());
+
+	for (uint32_t NumberVertices : Context->MeshVerticesPerPrimitive) {
+		*ChunkWriter << NumberVertices;
+	}
+
+	return true;
+}
+
+bool MPKFExporter::BuildSkinBoneTree(IGameNode* Node, MPKFMeshExporterContext* Context)
+{
+	INode* MaxNode = Node->GetMaxNode();
+	if (MaxNode->UserPropExists(_T("MP_BONE_HELPER"))) {
+		return true;
+	}
+
+	IS_ASCII_STRING(Node->GetName());
+	
+	Context->SkinBoneNames.push_back(TSTR(Node->GetName()));
+
+	for (int NodeID = 0; NodeID < Node->GetChildCount(); NodeID++) {
+		if (!BuildSkinBoneTree(Node->GetNodeChild(NodeID), Context)) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+IGameNode* GetBoneParentNode(IGameNode* Node, MPKFMeshExporterContext* Context, int& BoneIndex)
+{
+	IGameNode* BoneNode = Node;
+
+	bool Found = false;
+	while (BoneNode != nullptr && !Found) {
+		for (size_t BoneNameIndex = 0; BoneNameIndex < Context->SkinBoneNames.size(); BoneNameIndex++) {
+			if (Context->SkinBoneNames[BoneNameIndex] == TSTR(BoneNode->GetName())) {
+				Found = true;
+				BoneIndex = BoneNameIndex;
+				break;
+			}
+		}
+
+		if (!Found) {
+			BoneNode = BoneNode->GetNodeParent();
+		}
+	}
+
+	if (Found && _tcscmp(Node->GetName(), BoneNode->GetName()) != 0) {
+		if (BoneIndex == 17) {
+			//std::string a = std::format("{}", BoneIndex);
+			OutputDebugString(_T("Bip01 Blink-L-Lower-Nub01"));
+		}
+
+		//OutputDebugString(Node->GetName());
+		//OutputDebugString(_T(" -> "));
+		//OutputDebugString(BoneNode->GetName());
+		//OutputDebugString(_T("\n"));
+	}
+
+	return BoneNode;
+}
+
+
+IGameNode* BuildBoneTree(IGameNode* Node, MPKFMeshExporterContext* Context, int& BoneIndex)
+{
+	return nullptr;
+}
+
+bool MPKFExporter::PrepareKFMeshExportSkinContext(IGameNode* Node, IGameMesh* Mesh, IGameObject* GameObject, MPKFGlobalExporterContext* GlobalContext, MPKFMeshExporterContext* Context)
+{
+	IGameSkin* Skin = GameObject->GetIGameSkin();
+
+	if (!Skin || !ExportOptions.ExportSkinning) {
+		return true;
+	}
+
+	Context->HasSkin = true;
+
+	if (Skin->GetTotalSkinBoneCount() == 0) {
+		SHOW_ERROR(MPKFEXPORTER_ERROR_SKIN_NULL_BONES);
+		return false;
+	}
+
+	if (Mesh->GetNumberOfVerts() != Skin->GetNumOfSkinnedVerts()) {
+		SHOW_ERROR(MPKFEXPORTER_ERROR_SKIN_FREE_VERTEX, Node->GetName());
+		return false;
+	}
+
+	IGameNode* RootBone = nullptr;
+	for (int BoneID = 0; BoneID < Skin->GetTotalBoneCount(); BoneID++) {
+		IGameNode* Bone = Skin->GetIGameBone(BoneID, true);
+		if (Bone == nullptr) {
+			SHOW_ERROR(MPKFEXPORTER_ERROR_SKIN_NULL_BONE, BoneID);
+			return false;
+		}
+		while (Bone != nullptr) {
+			if (Bone->GetNodeParent() == nullptr) {
+				if (RootBone != nullptr && RootBone != Bone) {
+					SHOW_ERROR(MPKFEXPORTER_ERROR_SKIN_MORE_THAN_ONE_ROOT);
+					return false;
+				}
+				RootBone = Bone;
+				break;
+			}
+			Bone = Bone->GetNodeParent();
+		}
+	}
+
+	if (!BuildSkinBoneTree(RootBone, Context)) {
+		return false;
+	}
+
+	Context->SkinObjectName = TSTR(Node->GetName());
+
+	Modifier* SkinModifier{ Skin->GetMaxModifier() };
+
+	IPhysiqueExport* PhysiqueInterface{ nullptr };
+	IPhyContextExport* PhysiqueContext{ nullptr };
+	
+	if (SkinModifier->ClassID() == Class_ID(PHYSIQUE_CLASS_ID_A, PHYSIQUE_CLASS_ID_B)) {
+		PhysiqueInterface = (IPhysiqueExport*)SkinModifier->GetInterface(I_PHYINTERFACE);
+		if (!PhysiqueInterface) {
+			SHOW_ERROR(_T("Unable to initialize Physique modifier"));
+			return false;
+		}
+
+		PhysiqueContext = PhysiqueInterface->GetContextInterface(Node->GetMaxNode());
+		if (!PhysiqueContext) {
+			SHOW_ERROR(_T("Unable to initialize Physique Context interface"));
+			return false;
+		}
+	}
+
+	PhysiqueContext->AllowBlending(TRUE);
+	PhysiqueContext->ConvertToRigid(TRUE);
+
+
+	//Context->SkinVertexOffset.push_back(SkinVertexOffsetIndex);
+
+	const int NumberOfBones = 0;// Skin->GetNumberOfBones(Face->vert[i]);
+
+	if (NumberOfBones > 4 && ExportOptions.Game == 1) {
+		SHOW_ERROR(MPKFEXPORTER_ERROR_MP2_SKIN_BONES_NUM, Node->GetName());
+		return false;
+	}
+
+	if (NumberOfBones > 3 && ExportOptions.Game == 0) {
+		SHOW_ERROR(MPKFEXPORTER_ERROR_MP1_SKIN_BONES_NUM, Node->GetName());
+		return false;
+	}
+
+	std::map<int, float> BoneToWeight{};
+	float Sum{ 0.f };
+
+	for (int BoneID = 0; BoneID < NumberOfBones; BoneID++)
+	{
+		//const float Weight{ Skin->GetWeight(Face->vert[i], BoneID) };
+
+		int BoneNameIndex{ 0 };
+		//IGameNode* BoneNode = GetBoneParentNode(Skin->GetIGameBone(Face->vert[i], BoneID), Context, BoneNameIndex);
+
+		//if (!BoneNode) {
+			SHOW_ERROR(MPKFEXPORTER_ERROR_SKIN_NULL_BONE, BoneID);
+			return false;
+		//}
+
+		//if (BoneToWeight.contains(BoneNameIndex)) {
+		//	BoneToWeight[BoneNameIndex] += Weight;
+		//}
+		//else {
+		//	BoneToWeight[BoneNameIndex] = Weight;
+		//}
+
+		//Sum += Weight;
+	}
+
+	for (const auto& [BoneId, Weight] : BoneToWeight) {
+		//LocalBonesIDsPerVertex.push_back(BoneId);
+		//LocalWeightsPerVertex.push_back(Weight / Sum);
+	}
+
+	//LocalBonesNumPerVertex.push_back(BoneToWeight.size());
+	//SkinVertexOffsetIndex += BoneToWeight.size();
+
+	for (int VertexIndex : Context->MeshMaxVertexIndex) {
+		IPhyVertexExport* PhyVertexInterface = PhysiqueContext->GetVertexInterface(VertexIndex);
+		if (!PhyVertexInterface) {
+			SHOW_ERROR(_T("Unable to initialize Physique Vertex interface"));
+			return false;
+		}
+		
+		if (PhyVertexInterface->GetVertexType() == RIGID_NON_BLENDED_TYPE)
+		{
+			IPhyRigidVertex* rv = (IPhyRigidVertex*)PhyVertexInterface;
+
+			INode* n = rv->GetNode();
+
+			//Bones.insert(TSTR(n->GetName()));
+			//OutputDebugString(n->GetName());
+			//OutputDebugString(_T("\n"));
+
+			//assert(n != NULL);
+
+			//boneVertices_.push_back(BoneVertex(p, boneIndex(n)));
+		}
+		else if (PhyVertexInterface->GetVertexType() == RIGID_BLENDED_TYPE)
+		{
+			IPhyBlendedRigidVertex* rbv = (IPhyBlendedRigidVertex*)PhyVertexInterface;
+			int nNodes = rbv->GetNumberNodes();
+			for (int i = 0; i < nNodes; i++) {
+				INode* n = rbv->GetNode(i);
+				
+				if (n == nullptr) {
+					SHOW_ERROR(MPKFEXPORTER_ERROR_SKIN_NULL_BONE, i);
+					return false;
+				}
+				//Bones.insert(TSTR(n->GetName()));
+				//OutputDebugString(n->GetName());
+				//OutputDebugString(_T("\n"));
+			}
+		} 
+		else 
+		{
+			SHOW_ERROR(_T("Unknown vertex type in physiqued object"));
+			return false;
+		}
+
+		PhysiqueContext->ReleaseVertexInterface(PhyVertexInterface);
+
+		IPhyFloatingVertex* FloatingVertex = PhysiqueContext->GetFloatingVertexInterface(VertexIndex);
+		if (FloatingVertex) {
+			int nNodes = FloatingVertex->GetNumberNodes();
+			for (int i = 0; i < nNodes; i++) {
+				INode* n = FloatingVertex->GetNode(i);
+
+				if (n == nullptr) {
+					SHOW_ERROR(MPKFEXPORTER_ERROR_SKIN_NULL_BONE, i);
+					return false;
+				}
+
+				//Bones.insert(TSTR(n->GetName()));
+			}
+
+			PhysiqueContext->ReleaseVertexInterface(FloatingVertex);
+		}
+	}
+
+
+	//size_t b = Bones.size();
+
+
+	PhysiqueInterface->ReleaseContextInterface(PhysiqueContext);
+}
+
+bool MPKFExporter::PrepareKFMeshExportContext(IGameNode* Node, IGameMesh* Mesh, IGameObject* GameObject, MPKFGlobalExporterContext* GlobalContext, MPKFMeshExporterContext* Context)
 {
 	Mesh->SetCreateOptimizedNormalList();
 	if (!Mesh->InitializeData()) {
+		SHOW_ERROR(MPKFEXPORTER_ERROR_MESH_TRIANGULATE, Node->GetName());
 		return false;
 	}
 
-	std::unique_ptr<MPMemoryChunkWriter> NodeChunk{ ChunkWriter->CreateChunk(0x0C, MPKFTYPE_NODE_SUB_CHUNK_ID, 1) };
-	if (!DoExportNode(Node, NodeChunk.get())) {
-		return false;
-	}
-	*ChunkWriter << NodeChunk.get();
-	NodeChunk.reset();
+	IGameSkin* Skin = GameObject->GetIGameSkin();
 
-	//Geometry
-	std::unique_ptr<MPMemoryChunkWriter> GeometryChunk{ ChunkWriter->CreateChunk(0x0C, MPKFTYPE_GEOMETRY_SUB_CHUNK_ID, 1) };
+	if (Skin && ExportOptions.ExportSkinning) {
+
+		Context->HasSkin = true;
+
+		if (Skin->GetTotalSkinBoneCount() == 0) {
+			SHOW_ERROR(MPKFEXPORTER_ERROR_SKIN_NULL_BONES);
+			return false;
+		}
+
+		if (Mesh->GetNumberOfVerts() != Skin->GetNumOfSkinnedVerts()) {
+			SHOW_ERROR(MPKFEXPORTER_ERROR_SKIN_FREE_VERTEX, Node->GetName());
+			return false;
+		}
+
+		IGameNode* RootBone = nullptr;
+		for (int BoneID = 0; BoneID < Skin->GetTotalBoneCount(); BoneID++) {
+			IGameNode* Bone = Skin->GetIGameBone(BoneID, true);
+			if (Bone == nullptr) {
+				SHOW_ERROR(MPKFEXPORTER_ERROR_SKIN_NULL_BONE, BoneID);
+				return false;
+			}
+			while (Bone != nullptr) {
+				if (Bone->GetNodeParent() == nullptr) {
+					if (RootBone != nullptr && RootBone != Bone) {
+						SHOW_ERROR(MPKFEXPORTER_ERROR_SKIN_MORE_THAN_ONE_ROOT);
+						return false;
+					}
+					RootBone = Bone;
+					break;
+				}
+				Bone = Bone->GetNodeParent();
+			}
+		}
+
+		if (!BuildSkinBoneTree(RootBone, Context)) {
+			return false;
+		}
+
+		Context->SkinObjectName = TSTR(Node->GetName());
+	}
+
 	std::vector<MPVector3> LocalNormals;
 	std::vector<MPVector2> LocalTexVertices;
 	std::vector<MPVector3> LocalVertices;
 	std::vector<uint16_t> LocalIndices;
-	std::map<uint16_t, std::map<uint16_t, uint16_t>> MaxVertexToLocal;
+	std::map<uint16_t, std::map<uint16_t, std::map<uint16_t, uint16_t>>> MaxVertexToLocal;
+	std::vector<int> LocalBonesNumPerVertex;
+	std::vector<float> LocalWeightsPerVertex;
+	std::vector<int> LocalBonesIDsPerVertex;
 
-	std::vector<MPVector3> MeshVertices;
-	std::vector<MPVector2> MeshTexVertices;
-	std::vector<MPVector3> MeshNormals;
-	std::vector<uint16_t> MeshIndices;
-	std::vector<uint32_t> MeshVerticesPerPrimitive;
-	std::vector<uint32_t> MeshIndicesPerPrimitive;
-	std::vector<IGameMaterial*> MaterialPerPrimitive;
+	Context->MeshVertices.clear();
+	Context->MeshTexVertices.clear();
+	Context->MeshNormals.clear();
+	Context->MeshIndices.clear();
+	Context->MeshVerticesPerPrimitive.clear();
+	Context->MeshIndicesPerPrimitive.clear();
+	Context->MaterialPerPrimitive.clear();
 
-	Tab<int> ActiveMatIDs = Mesh->GetActiveMatIDs();
+	int SkinVertexOffsetIndex = 0;
 
-	for (int ActiveMatID = 0; ActiveMatID < ActiveMatIDs.Count(); ActiveMatID++)
+	std::map<int, std::vector<int>> MaterialGroups;
+
+	for (int FaceID = 0; FaceID < Mesh->GetNumberOfFaces(); FaceID++)
+	{
+		IGameMaterial* Mat = Mesh->GetMaterialFromFace(FaceID);
+		FaceEx* Face = Mesh->GetFace(FaceID);
+
+		auto Result = std::find(std::begin(Context->MaterialPerPrimitive), std::end(Context->MaterialPerPrimitive), Mat);
+
+		if (Result != std::end(Context->MaterialPerPrimitive)) {
+			int index = std::distance(std::begin(Context->MaterialPerPrimitive), Result);
+			MaterialGroups[index].push_back(FaceID);
+		}
+		else {
+			MaterialGroups[Context->MaterialPerPrimitive.size()].push_back(FaceID);
+			Context->MaterialPerPrimitive.push_back(Mat);
+		}
+
+		auto MaterialsContextResult = std::find(std::begin(GlobalContext->Materials), std::end(GlobalContext->Materials), Mat);
+		if (MaterialsContextResult == std::end(GlobalContext->Materials)) {
+			GlobalContext->Materials.push_back(Mat);
+		}
+	}
+
+	for (auto MaterialIter : MaterialGroups)
 	{
 		LocalNormals.clear();
 		LocalVertices.clear();
 		LocalIndices.clear();
 		LocalTexVertices.clear();
 		MaxVertexToLocal.clear();
+		LocalBonesNumPerVertex.clear();
+		LocalWeightsPerVertex.clear();
 
-		Tab<FaceEx*> Faces = Mesh->GetFacesFromMatID(ActiveMatIDs[ActiveMatID]);
-		for (int FaceID = 0; FaceID < Faces.Count(); FaceID++)
+		for (int FaceID : MaterialIter.second)
 		{
-			FaceEx* Face = Faces[FaceID];
-		
-			if (FaceID == 0) {
-				MaterialPerPrimitive.push_back(Mesh->GetMaterialFromFace(Face->meshFaceIndex));
-			}
+			FaceEx* Face = Mesh->GetFace(FaceID);
 
 			for (uint16_t i = 0; i < 3; i++) {
-				if (MaxVertexToLocal.contains(Face->vert[i]) && MaxVertexToLocal[Face->vert[i]].contains(Face->norm[i])) {
-					LocalIndices.push_back(MaxVertexToLocal[Face->vert[i]][Face->norm[i]]);
+				if (MaxVertexToLocal.contains(Face->vert[i]) &&
+					MaxVertexToLocal[Face->vert[i]].contains(Face->norm[i]) &&
+					MaxVertexToLocal[Face->vert[i]][Face->norm[i]].contains(Face->texCoord[i]))
+				{
+					LocalIndices.push_back(MaxVertexToLocal[Face->vert[i]][Face->norm[i]][Face->texCoord[i]]);
 					continue;
 				}
 
-				MaxVertexToLocal[Face->vert[i]][Face->norm[i]] = LocalVertices.size();
+				MaxVertexToLocal[Face->vert[i]][Face->norm[i]][Face->texCoord[i]] = LocalVertices.size();
+				Context->MeshMaxVertexIndex.push_back(Face->vert[i]);
 
+				if (Skin && ExportOptions.ExportSkinning) 
+				{
+					Context->SkinVertexOffset.push_back(SkinVertexOffsetIndex);
+
+					const int NumberOfBones = Skin->GetNumberOfBones(Face->vert[i]);
+
+					if (NumberOfBones > 4 && ExportOptions.Game == 1) {
+						SHOW_ERROR(MPKFEXPORTER_ERROR_MP2_SKIN_BONES_NUM, Node->GetName());
+						return false;
+					}
+
+					if (NumberOfBones > 3 && ExportOptions.Game == 0) {
+						SHOW_ERROR(MPKFEXPORTER_ERROR_MP1_SKIN_BONES_NUM, Node->GetName());
+						return false;
+					}
+
+					std::map<int, float> BoneToWeight{};
+					float Sum{ 0.f };
+
+					for (int BoneID = 0; BoneID < NumberOfBones; BoneID++)
+					{
+						const float Weight{ Skin->GetWeight(Face->vert[i], BoneID) };
+
+						int BoneNameIndex{ 0 };
+						IGameNode* BoneNode = GetBoneParentNode(Skin->GetIGameBone(Face->vert[i], BoneID), Context, BoneNameIndex);
+
+						if (!BoneNode) {
+							SHOW_ERROR(MPKFEXPORTER_ERROR_SKIN_NULL_BONE, BoneID);
+							return false;
+						}
+
+						if (BoneToWeight.contains(BoneNameIndex)) {
+							BoneToWeight[BoneNameIndex] += Weight;
+						}
+						else {
+							BoneToWeight[BoneNameIndex] = Weight;
+						}
+
+						Sum += Weight;
+					}
+
+					for (const auto& [BoneId, Weight] : BoneToWeight) {
+						LocalBonesIDsPerVertex.push_back(BoneId);
+						LocalWeightsPerVertex.push_back(Weight / Sum);
+					}
+
+					LocalBonesNumPerVertex.push_back(BoneToWeight.size());
+					SkinVertexOffsetIndex += BoneToWeight.size();
+				}
+				
 				float ScaleValue = 1.f;
 				if (ExportOptions.Scale) {
 					ScaleValue = ExportOptions.ScaleValue;
@@ -584,181 +1234,151 @@ bool MPKFExporter::DoExportMesh(IGameNode* Node, IGameMesh* Mesh, MPMemoryChunkW
 				Point3 Normal = Mesh->GetNormal(Face->norm[i], true);
 				LocalNormals.push_back(MPVector3(Normal.x, Normal.y, Normal.z));
 
-				LocalIndices.push_back(MaxVertexToLocal[Face->vert[i]][Face->norm[i]]);
+				LocalIndices.push_back(MaxVertexToLocal[Face->vert[i]][Face->norm[i]][Face->texCoord[i]]);
 			}
 		}
 
 		for (MPVector3& Vertex : LocalVertices) {
-			MeshVertices.push_back(Vertex);
+			Context->MeshVertices.push_back(Vertex);
 		}
 
 		for (MPVector3& Normal : LocalNormals) {
-			MeshNormals.push_back(Normal);
+			Context->MeshNormals.push_back(Normal);
 		}
 
 		for (MPVector2& TexVertex : LocalTexVertices) {
-			MeshTexVertices.push_back(TexVertex);
+			Context->MeshTexVertices.push_back(TexVertex);
 		}
 
 		for (uint16_t Index : LocalIndices) {
-			MeshIndices.push_back(Index);
+			Context->MeshIndices.push_back(Index);
 		}
 
-		MeshVerticesPerPrimitive.push_back(LocalVertices.size());
+		for (int Index : LocalBonesNumPerVertex) {
+			Context->SkinBonesNumPerVertex.push_back(Index);
+		}
 
-		MeshIndicesPerPrimitive.push_back(LocalIndices.size());
+		for (float Index : LocalWeightsPerVertex) {
+			Context->SkinWeightsPerVertex.push_back(Index);
+		}
+
+		for (int Index : LocalBonesIDsPerVertex) {
+			Context->SkinBonesIDsPerVertex.push_back(Index);
+		}
+
+		Context->MeshVerticesPerPrimitive.push_back(LocalVertices.size());
+
+		Context->MeshIndicesPerPrimitive.push_back(LocalIndices.size());
 	}
 
-	*GeometryChunk << static_cast<uint32_t>(MeshVertices.size());
+	//PrepareKFMeshExportSkinContext(Node, Mesh, GameObject, GlobalContext, Context);
 
-	for (const MPVector3& Vertex : MeshVertices) {
-		GeometryChunk->Write(&Vertex.X, sizeof(float));
-		GeometryChunk->Write(&Vertex.Y, sizeof(float));
-		GeometryChunk->Write(&Vertex.Z, sizeof(float));
+	return true;
+}
+
+bool MPKFExporter::DoExportKFMesh(IGameNode* Node, MPKFMeshExporterContext* Context, MPMemoryChunkWriter* ChunkWriter)
+{
+	//Node
+	std::unique_ptr<MPMemoryChunkWriter> NodeChunk{ ChunkWriter->CreateChunk(0x0C, MPKFTYPE_NODE_SUB_CHUNK_ID, 1) };
+	if (!DoExportKFNode(Node, NodeChunk.get())) {
+		return false;
 	}
+	*ChunkWriter << NodeChunk.get();
+	NodeChunk.reset();
 
-	for (const MPVector3& Vertex : MeshNormals) {
-		GeometryChunk->Write(&Vertex.X, sizeof(float));
-		GeometryChunk->Write(&Vertex.Y, sizeof(float));
-		GeometryChunk->Write(&Vertex.Z, sizeof(float));
+	//Geometry
+	std::unique_ptr<MPMemoryChunkWriter> GeometryChunk{ ChunkWriter->CreateChunk(0x0C, MPKFTYPE_GEOMETRY_SUB_CHUNK_ID, 1) };
+	if (!DoExportKFGeometry(Context, GeometryChunk.get())) {
+		return false;
 	}
-
-	*GeometryChunk << static_cast<uint32_t>(MeshVerticesPerPrimitive.size());
-
-	for (uint32_t NumberVertices : MeshVerticesPerPrimitive) {
-		*GeometryChunk << NumberVertices;
-	}
-
 	*ChunkWriter << GeometryChunk.get();
 	GeometryChunk.reset();
 
 	//Polygons
 	std::unique_ptr<MPMemoryChunkWriter> PolygonsChunk{ ChunkWriter->CreateChunk(0x0C, MPKFTYPE_POLYGONS_SUB_CHUNK_ID, 1) };
-
-	*PolygonsChunk << static_cast<uint32_t>(MeshIndices.size());
-
-	for (const uint16_t Index : MeshIndices) {
-		PolygonsChunk->Write(&Index, sizeof(uint16_t));
+	if (!DoExportKFPolygons(Context, PolygonsChunk.get())) {
+		return false;
 	}
-	
-	*PolygonsChunk << static_cast<uint32_t>(MeshIndicesPerPrimitive.size());
-
-	for (const uint16_t NumIndices : MeshIndicesPerPrimitive) {
-		*PolygonsChunk << static_cast<uint32_t>(NumIndices / 3);
-	}
-
 	*ChunkWriter << PolygonsChunk.get();
 	PolygonsChunk.reset();
 
-	//TODO: Skip?
 	//Polygon Materials
 	std::unique_ptr<MPMemoryChunkWriter> PolygonMaterialsChunk{ ChunkWriter->CreateChunk(0x0C, MPKFTYPE_POLYGON_MATERIAL_SUB_CHUNK_ID, 1) };
-
-	*PolygonMaterialsChunk << static_cast<int32_t>(MaterialPerPrimitive.size());
-	
-	for (IGameMaterial* Material : MaterialPerPrimitive) {
-		WRITE_ASCII_STRING(MaterialName, Material->GetMaterialName(), PolygonMaterialsChunk);
+	if (!DoExportKFPolygonMaterials(Node, Context, PolygonMaterialsChunk.get())) {
+		return false;
 	}
-
 	*ChunkWriter << PolygonMaterialsChunk.get();
 	PolygonMaterialsChunk.reset();
 
 	//Polygon UVW
-	std::unique_ptr<MPMemoryChunkWriter> UVChunk{ ChunkWriter->CreateChunk(0x0C, MPKFTYPE_UV_MAPPING_SUB_CHUNK_ID, 1) };
-
-	*UVChunk << static_cast<uint32_t>(0);
-	
-	*UVChunk << static_cast<uint32_t>(MeshTexVertices.size());
-
-	for (MPVector2& Vertex : MeshTexVertices) {
-		float Z = 0.f;
-		UVChunk->Write(&Vertex.X, sizeof(float));
-		UVChunk->Write(&Vertex.Y, sizeof(float));
-		UVChunk->Write(&Z, sizeof(float));
+	if (ExportOptions.ExportMaterials) {
+		std::unique_ptr<MPMemoryChunkWriter> UVChunk{ ChunkWriter->CreateChunk(0x0C, MPKFTYPE_UV_MAPPING_SUB_CHUNK_ID, 1) };
+		if (!DoExportKFUVWMapping(Context, UVChunk.get())) {
+			return false;
+		}
+		*ChunkWriter << UVChunk.get();
+		UVChunk.reset();
 	}
-
-	*UVChunk << static_cast<uint32_t>(MeshVerticesPerPrimitive.size());
-
-	for (uint32_t NumberVertices : MeshVerticesPerPrimitive) {
-		*UVChunk << NumberVertices;
-	}
-
-	*ChunkWriter << UVChunk.get();
-	UVChunk.reset();
 
 	return true;
 }
 
-bool MPKFExporter::DoExportMaterials(MPMemoryWriter& MemoryWriter, const TSTR& CopyDirTo)
+bool MPKFExporter::DoExportKFMaterials(MPKFGlobalExporterContext* GlobalContext, const TSTR& CopyDirTo)
 {
 	if (!ExportOptions.ExportMaterials) {
 		return true;
 	}
 
-	std::unique_ptr<MPMemoryChunkWriter> MaterialListChunk{ MemoryWriter.CreateChunk(0x0C, MPKFTYPE_MATERIAL_LIST_CHUNK_ID, 0) };
+	std::unique_ptr<MPMemoryChunkWriter> MaterialListChunk{ GlobalContext->MaterialMemoryWriter.CreateChunk(0x0C, MPKFTYPE_MATERIAL_LIST_CHUNK_ID, 0) };
 
-	const int NumberOfRootMaterials = pIgame->GetRootMaterialCount();
-
-	int32_t TotalNumberOfMaterials = 0;
-	for (int MaterialIndex = 0; MaterialIndex < NumberOfRootMaterials; MaterialIndex++) {
-		IGameMaterial* Material = pIgame->GetRootMaterial(MaterialIndex);
-		if (Material->IsSubObjType()) {
-			TotalNumberOfMaterials += Material->GetSubMaterialCount();
-		}
-		else {
-			TotalNumberOfMaterials += 1;
-		}
-	}
+	const int NumberOfRootMaterials = GlobalContext->Materials.size();
 
 	CStr PathsAsc = ExportOptions.Paths.ToCStr();
 	*MaterialListChunk << MPString(PathsAsc.data(), PathsAsc.Length());
+	*MaterialListChunk << static_cast<int32_t>(GlobalContext->Materials.size());
 
-	*MaterialListChunk << TotalNumberOfMaterials;
-
-	for (int MaterialIndex = 0; MaterialIndex < NumberOfRootMaterials; MaterialIndex++) {
-		std::unique_ptr<MPMemoryChunkWriter> MaterialChunk{ MemoryWriter.CreateChunk(0x0C, MPKFTYPE_MATERIAL_SUB_CHUNK_ID, ExportOptions.Game == 0 ? 1 : 0) };
-		IGameMaterial* Material = pIgame->GetRootMaterial(MaterialIndex);
-		if (Material->IsSubObjType()) {
-			for (int SumMaterialIndex = 0; SumMaterialIndex < Material->GetSubMaterialCount(); SumMaterialIndex++) {
-				if (!DoExportMaterial(Material->GetSubMaterial(SumMaterialIndex), CopyDirTo, MaterialChunk.get())) {
-					return false;
-				}
-			}
-		} else {
-			if (!DoExportMaterial(Material, CopyDirTo, MaterialChunk.get())) {
-				return false;
-			}
+	for (IGameMaterial* Material : GlobalContext->Materials)
+	{
+		std::unique_ptr<MPMemoryChunkWriter> MaterialChunk{ GlobalContext->MaterialMemoryWriter.CreateChunk(0x0C, MPKFTYPE_MATERIAL_SUB_CHUNK_ID, ExportOptions.Game == 0 ? 1 : 2) };
+		if (!DoExportKFMaterial(Material, CopyDirTo, MaterialChunk.get())) {
+			return false;
 		}
 		*MaterialListChunk << MaterialChunk.get();
 	}
 
-	MemoryWriter << MaterialListChunk.get();
+	GlobalContext->MaterialMemoryWriter << MaterialListChunk.get();
 
 	return true;
 }
 
-bool MPKFExporter::DoExportTexture(Texmap* Texture, const TSTR& CopyDirTo, MPMemoryChunkWriter* ChunkWriter)
+bool MPKFExporter::DoExportKFTexture(Texmap* Texture, const TSTR& CopyDirTo, MPMemoryChunkWriter* ChunkWriter)
 {
-	if (!Texture || Texture->ClassID() != MPKFTEXTURE_CLASS_ID) {
+	if (!Texture) {
 		return false;
+	}
+
+	if (Texture->ClassID() != MPKFTEXTURE_CLASS_ID) {
+		TSTR Str;
+		Texture->GetClassName(Str);
+		SHOW_ERROR(MPKFEXPORTER_ERROR_UNSUPORTED_TEXTURE, Texture->GetName().data(), Str.data());
 	}
 
 	std::unique_ptr<MPMemoryChunkWriter> TexureChunkWriter{ ChunkWriter->CreateChunk(0x0C, MPKFTYPE_TEXTURE_SUB_CHUNK_ID, 1)};
 	IMPKFTexture* KFTexture = dynamic_cast<IMPKFTexture*>(Texture);
 
 	const int32_t NumberOfTextures = KFTexture->GetTexturesCount();
-	
+
 	if (NumberOfTextures <= 0) {
+		SHOW_ERROR(MPKFEXPORTER_ERROR_TEXTURE_EMPTY_BITMAP, KFTexture->GetTextureName());
 		return false;
 	}
 
-	if (!IsASCII(KFTexture->GetTextureName())) {
+	if (NumberOfTextures > 1 && KFTexture->GetAnimationStartFrame() > NumberOfTextures) {
+		SHOW_ERROR(MPKFEXPORTER_ERROR_TEXTURE_START_FRAME, KFTexture->GetTextureName(), NumberOfTextures, KFTexture->GetAnimationStartFrame());
 		return false;
 	}
 
-	TSTR TextureName = TSTR(KFTexture->GetTextureName());
-	CStr TextureNameAsc = TextureName.ToCStr();
-	*TexureChunkWriter << MPString(TextureNameAsc.data(), TextureNameAsc.Length());
+	WRITE_ASCII_STRING(TextureName, KFTexture->GetTextureName(), TexureChunkWriter);
 
 	if (KFTexture->IsMipMapsAuto()) {
 		*TexureChunkWriter << (int32_t)(0);
@@ -770,21 +1390,19 @@ bool MPKFExporter::DoExportTexture(Texmap* Texture, const TSTR& CopyDirTo, MPMem
 	*TexureChunkWriter << NumberOfTextures;
 
 	for (int32_t TextureIndex = 0; TextureIndex != NumberOfTextures; TextureIndex++) {
-		const MCHAR* TextureFileName = KFTexture->GetTextureFileName(TextureIndex);
+		const TSTR TextureFileName = KFTexture->GetTextureFileName(TextureIndex);
 
-		if (TextureFileName == nullptr) {
+		if (TextureFileName == _T("")) {
+			SHOW_ERROR(MPKFEXPORTER_ERROR_TEXTURE_EMPTY_BITMAP, KFTexture->GetTextureName());
 			return false;
 		}
 
-		if (!IsASCII(TextureFileName)) {
-			return false;
-		}
+		IS_ASCII_STRING(TextureFileName.data());
 
 		TSTR FilePath, FileName, FileExt;
-		SplitFilename(TSTR(TextureFileName), &FilePath, &FileName, &FileExt);
+		SplitFilename(TextureFileName, &FilePath, &FileName, &FileExt);
 
-		TSTR FileNameWithExt(FileName);
-		FileNameWithExt.Append(FileExt);
+		TSTR FileNameWithExt(FileName + FileExt);
 
 		if (ExportOptions.CopyTexturesToExportPath) {
 			TSTR CopyPath(CopyDirTo);
@@ -809,31 +1427,29 @@ bool MPKFExporter::DoExportTexture(Texmap* Texture, const TSTR& CopyDirTo, MPMem
 	return true;
 }
 
-bool MPKFExporter::DoExportMaterial(IGameMaterial* Material, const TSTR& CopyDirTo, MPMemoryChunkWriter* ChunkWriter)
+bool MPKFExporter::DoExportKFMaterial(IGameMaterial* Material, const TSTR& CopyDirTo, MPMemoryChunkWriter* ChunkWriter)
 {
 	Mtl* MaxMaterial = Material->GetMaxMaterial();
 	
 	if (MaxMaterial->ClassID() != MPKFMATERIAL_CLASS_ID) {
+		SHOW_ERROR(MPKFEXPORTER_ERROR_UNSUPORTED_MATERIAL, Material->GetMaterialName(), Material->GetClassName());
 		return false;
 	}
 
-	if (!IsASCII(Material->GetMaterialName())) {
-		return false;
-	}
+	IS_ASCII_STRING(Material->GetMaterialName());
 
 	IMPKFMaterial* KFMaterial = dynamic_cast<IMPKFMaterial*>(MaxMaterial);
 
-	if (!KFMaterial->IsAllTexturesCorrect()) {
+	if (static_cast<int>(KFMaterial->GetGameVersion()) != ExportOptions.Game) {
+		SHOW_ERROR(MPKFEXPORTER_ERROR_MATERIAL_WRONG_TARGET, ExportOptions.Game == 0 ? _T("Max Payne 1") : _T("Max Payne 2"), Material->GetMaterialName(), KFMaterial->GetGameVersion() == KFMaterialGameVersion::kMaxPayne1 ? _T("Max Payne 1") : _T("Max Payne 2"));
 		return false;
 	}
 
-	TSTR MaterialName = TSTR(Material->GetMaterialName());
-	CStr MaterialNameAsc = MaterialName.ToCStr();
-	*ChunkWriter << MPString(MaterialNameAsc.data(), MaterialNameAsc.Length());
+	WRITE_ASCII_STRING(MaterialName, Material->GetMaterialName(), ChunkWriter);
 
 	*ChunkWriter << KFMaterial->IsTwoSided();
 	*ChunkWriter << KFMaterial->IsFogging();
-	*ChunkWriter << false; //*ChunkWriter << KFMaterial->is_diffuse_combined();
+	*ChunkWriter << false; //is_diffuse_combined
 	*ChunkWriter << KFMaterial->IsInvisibleGeometry();
 	*ChunkWriter << KFMaterial->HasVertexAlpha();
 	*ChunkWriter << static_cast<int32_t>(KFMaterial->GetDiffuseColorShadingType());
@@ -871,14 +1487,22 @@ bool MPKFExporter::DoExportMaterial(IGameMaterial* Material, const TSTR& CopyDir
 
 	*ChunkWriter << KFMaterial->HasDiffuseTexture();
 	if (KFMaterial->HasDiffuseTexture()) {
-		if (!DoExportTexture(KFMaterial->GetDiffuseTexture(), CopyDirTo, ChunkWriter)) {
+		if (!KFMaterial->GetDiffuseTexture()) {
+			SHOW_ERROR(MPKFEXPORTER_ERROR_TEXTURE_EMPTY, _T("Diffuse"), MaterialName.data());
+			return false;
+		}
+		if (!DoExportKFTexture(KFMaterial->GetDiffuseTexture(), CopyDirTo, ChunkWriter)) {
 			return false;
 		}
 	}
 
 	*ChunkWriter << KFMaterial->HasReflectionTexture();
 	if (KFMaterial->HasReflectionTexture()) {
-		if (!DoExportTexture(KFMaterial->GetReflectionTexture(), CopyDirTo, ChunkWriter)) {
+		if (!KFMaterial->GetReflectionTexture()) {
+			SHOW_ERROR(MPKFEXPORTER_ERROR_TEXTURE_EMPTY, _T("Reflection"), MaterialName.data());
+			return false;
+		}
+		if (!DoExportKFTexture(KFMaterial->GetReflectionTexture(), CopyDirTo, ChunkWriter)) {
 			return false;
 		}
 	}
@@ -886,7 +1510,11 @@ bool MPKFExporter::DoExportMaterial(IGameMaterial* Material, const TSTR& CopyDir
 	if (ExportOptions.Game == 0) {
 		*ChunkWriter << KFMaterial->HasBumpTexture();
 		if (KFMaterial->HasBumpTexture()) {
-			if (!DoExportTexture(KFMaterial->GetBumpTexture(), CopyDirTo, ChunkWriter)) {
+			if (!KFMaterial->GetBumpTexture()) {
+				SHOW_ERROR(MPKFEXPORTER_ERROR_TEXTURE_EMPTY, _T("Bump"), MaterialName.data());
+				return false;
+			}
+			if (!DoExportKFTexture(KFMaterial->GetBumpTexture(), CopyDirTo, ChunkWriter)) {
 				return false;
 			}
 		}
@@ -898,7 +1526,11 @@ bool MPKFExporter::DoExportMaterial(IGameMaterial* Material, const TSTR& CopyDir
 	if (ExportOptions.Game == 0) {
 		*ChunkWriter << KFMaterial->HasAlphaTexture();
 		if (KFMaterial->HasAlphaTexture()) {
-			if (!DoExportTexture(KFMaterial->GetAlphaTexture(), CopyDirTo, ChunkWriter)) {
+			if (!KFMaterial->GetAlphaTexture()) {
+				SHOW_ERROR(MPKFEXPORTER_ERROR_TEXTURE_EMPTY, _T("Alpha"), MaterialName.data());
+				return false;
+			}
+			if (!DoExportKFTexture(KFMaterial->GetAlphaTexture(), CopyDirTo, ChunkWriter)) {
 				return false;
 			}
 		}
@@ -910,7 +1542,11 @@ bool MPKFExporter::DoExportMaterial(IGameMaterial* Material, const TSTR& CopyDir
 	if (ExportOptions.Game == 0) {
 		*ChunkWriter << KFMaterial->HasMaskTexture();
 		if (KFMaterial->HasMaskTexture()) {
-			if (!DoExportTexture(KFMaterial->GetMaskTexture(), CopyDirTo, ChunkWriter)) {
+			if (!KFMaterial->GetMaskTexture()) {
+				SHOW_ERROR(MPKFEXPORTER_ERROR_TEXTURE_EMPTY, _T("Mask"), MaterialName.data());
+				return false;
+			}
+			if (!DoExportKFTexture(KFMaterial->GetMaskTexture(), CopyDirTo, ChunkWriter)) {
 				return false;
 			}
 		}
@@ -925,8 +1561,9 @@ bool MPKFExporter::DoExportMaterial(IGameMaterial* Material, const TSTR& CopyDir
 	if (ExportOptions.Game == 1) {
 		*ChunkWriter << KFMaterial->HasAlphaCompare();
 		*ChunkWriter << KFMaterial->HasEdgeBlend();
-		*ChunkWriter << KFMaterial->GetAlphaReferenceValue();
+		*ChunkWriter << KFMaterial->GetAlphaReferenceValue(); //TODO: INT
 	}
 	
 	return true;
 }
+

@@ -361,9 +361,9 @@ bool MPKFMaterial::HasAlphaCompare()
     return HasAlphaComp;
 }
 
-float MPKFMaterial::GetAlphaReferenceValue()
+int32_t MPKFMaterial::GetAlphaReferenceValue()
 {
-    return AlphaReferenceValue;
+    return static_cast<int32_t>(AlphaReferenceValue);
 }
 
 bool MPKFMaterial::HasAlphaTexture()

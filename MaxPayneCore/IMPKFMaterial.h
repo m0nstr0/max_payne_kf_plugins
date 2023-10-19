@@ -91,7 +91,7 @@ public:
 	virtual KFDiffuseTextureShadingType GetDiffuseTextureShadingType() = 0;
 	virtual bool HasAlphaCompare() = 0;
 	virtual bool HasEdgeBlend() = 0;
-	virtual float GetAlphaReferenceValue() = 0;
+	virtual int GetAlphaReferenceValue() = 0;
 
 	virtual bool HasAlphaTexture() = 0;
 	virtual class Texmap* GetAlphaTexture() = 0;

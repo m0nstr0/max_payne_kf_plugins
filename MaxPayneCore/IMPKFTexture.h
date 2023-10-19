@@ -24,7 +24,7 @@ class IMPKFTexture
 public:
 	virtual const MCHAR* GetTextureName() = 0;
 	virtual int32_t GetTexturesCount() = 0;
-	virtual const MCHAR* GetTextureFileName(int32_t TextureIndex) = 0;
+	virtual const TSTR GetTextureFileName(int32_t TextureIndex) = 0;
 	virtual int32_t GetMipMapsNum() = 0;
 	virtual bool IsMipMapsAuto() = 0;
 	virtual KFTextureFiltering GetFiltering() = 0;

@@ -83,6 +83,8 @@ public:
 
 	MPMemoryWriter* operator<<(const MPMatrix4x4& Data);
 
+	MPMemoryWriter* operator<<(const MPMemoryWriter* Data);
+
 	MPMemoryWriter* operator<<(const MPMemoryChunkWriter* Data);
 
 	MPMemoryWriter* operator<<(const MPString& Data);
@@ -100,7 +102,7 @@ public:
 	MPMemoryChunkWriter* CreateChunk(uint8_t TagID, uint32_t ID, uint32_t Version);
 
 protected:
-	void IncreaseCapacity();
+	void IncreaseCapacity(size_t NewSize);
 
 	size_t _Position;
 

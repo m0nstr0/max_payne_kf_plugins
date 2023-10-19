@@ -7,6 +7,7 @@
 
 #include "MPKFTexture.h"
 #include "MPKFTextureDesc.h"
+#include <bmmlib.h>
 
 enum { mpkftexture_params };
 
@@ -48,6 +49,8 @@ void MPKFTexturePBAccessor::Set(PB2Value& val, ReferenceMaker* owner, ParamID id
 	{
 		case pb_mpkftexture_basic_params_bitmap:
 		{
+			Texture->ParamBitmap = val.bm;
+			Texture->ReloadActiveBitmap(true);
 			break;
 		}
 		case pb_mpkftexture_basic_params_mipmaps_num: {
@@ -112,16 +115,12 @@ static ParamBlockDesc2 mmpkftexture_param_blk(mpkftexture_params, _T("params"), 
 	p_ui, mpkftexture_params_basic_rollout, TYPE_BITMAPBUTTON, IDC_KF_TEXTURE_SELECT_BUTTON,
 	p_end,
 
-	pb_mpkftexture_basic_params_bitmap_file, _T("bitmap_filename"), TYPE_FILENAME, 0, IDS_KF_TEXTURE_BITMAP,
-	p_accessor, &gMPKFTextureAccessor,
-	p_assetTypeID, MaxSDK::AssetManagement::AssetType::kBitmapAsset,
-	p_end,
-
 	pb_mpkftexture_basic_params_filtering, _T("filtering"), TYPE_INT, 0, IDS_KF_TEXTURE_FILTERING,
 	p_default, 0,
 	p_accessor, & gMPKFTextureAccessor,
 	p_ui, mpkftexture_params_basic_rollout, TYPE_RADIO, 5, IDC_KF_TEXTURE_FILTERING_NONE, IDC_KF_TEXTURE_FILTERING_BILINEAR, IDC_KF_TEXTURE_FILTERING_TRILINEAR, IDC_KF_TEXTURE_FILTERING_ANISOTROPIC, IDC_KF_TEXTURE_FILTERING_AUTO,
 	p_vals, 0, 1, 2, 3, 4,
+	p_range, 0, 4,
 	p_end,
 
 	pb_mpkftexture_basic_params_mipmaps, _T("mipmaps"), TYPE_INT, 0, IDS_KF_TEXTURE_MIPMAPS,
@@ -129,6 +128,7 @@ static ParamBlockDesc2 mmpkftexture_param_blk(mpkftexture_params, _T("params"), 
 	p_accessor, & gMPKFTextureAccessor,
 	p_ui, mpkftexture_params_basic_rollout, TYPE_RADIO, 2, IDC_KF_TEXTURE_MIPMAPS_AUTO, IDC_KF_TEXTURE_MIPMAPS_MANUAL,
 	p_vals, 0, 1,
+	p_range, 0, 1,
 	p_end,
 
 	pb_mpkftexture_basic_params_mipmaps_num, _T("mipmaps_num"), TYPE_INT, 0, IDS_KF_TEXTURE_MIPMAPS_MANUAL_SPIN,
@@ -273,8 +273,6 @@ INT_PTR MPKFTextureDlgProc::DlgProc(TimeValue t, IParamMap2* map, HWND hWnd, UIN
 				}
 				case IDC_KF_TEXTURE_TEXTURE_RELOAD_BUTTON: {
 					Texture->ReloadActiveBitmap(true);
-					//BroadcastNotification(NOTIFY_BITMAP_CHANGED, (void*)theBMTex->m_bi.Name());
-					//theBMTex->NotifyChanged();
 					UpdateMtl();
 					InvalidateRect(Handle, nullptr, 0);
 					return TRUE;
@@ -307,19 +305,6 @@ MPKFTexture::MPKFTexture() :
 MPKFTexture::~MPKFTexture()
 {
 	DeleteAllRefs();
-	//if (TextureDlgProc) {
-	//	TextureDlgProc->DeleteThis();
-	//	TextureDlgProc = nullptr;
-	//}
-}
-
-void MPKFTexture::Init() 
-{
-
-}
-
-void MPKFTexture::InitSampler()
-{
 }
 
 void MPKFTexture::FreeActiveBitmap()
@@ -370,13 +355,10 @@ BMMRES MPKFTexture::LoadActiveBitmap(BOOL quiet)
 	BOOL Silent = FALSE;
 	BMMRES Status = BMMRES_SUCCESS;
 
-	PBBitmap* BitmapPB = nullptr;
-	pblock->GetValue(pb_mpkftexture_basic_params_bitmap, 0, BitmapPB);
-
-	if (BitmapPB != nullptr)
+	if (ParamBitmap != nullptr)
 	{
 		const TCHAR* OldName = ActiveBitmapInfo.Name();
-		const TCHAR* NewName = BitmapPB->bi.Name();
+		const TCHAR* NewName = ParamBitmap->bi.Name();
 		if (_tcscmp(OldName, NewName))
 			FreeActiveBitmap();
 		ActiveBitmapInfo.SetName(NewName);
@@ -394,12 +376,10 @@ BMMRES MPKFTexture::LoadActiveBitmap(BOOL quiet)
 
 	if (ActiveBitmap == nullptr)
 	{
-		//BMMSilentModeGuard silentModeGuard(quiet);
 		BOOL PrevSilentMode = TheManager->SilentMode();
 		TheManager->SetSilentMode(quiet);
-		Bitmap* NewBitmap = TheManager->Load(&BitmapPB->bi, &Status);
+		ActiveBitmap = TheManager->Load(&ParamBitmap->bi, &Status);
 		TheManager->SetSilentMode(PrevSilentMode);
-		ActiveBitmap = NewBitmap;
 	}
 
 	return BMMRES_SUCCESS;
@@ -410,7 +390,6 @@ void MPKFTexture::Reset()
 {
 	GetMPKFTextureDesc()->Reset(this, TRUE);
 	ivalid.SetEmpty();
-	Init();
 }
 
 void MPKFTexture::Update(TimeValue t, Interval& valid)
@@ -421,8 +400,7 @@ void MPKFTexture::Update(TimeValue t, Interval& valid)
 	{
 		ivalid.SetInfinite();
 
-		PBBitmap* pb;
-		pblock->GetValue(pb_mpkftexture_basic_params_bitmap, t, pb, ivalid);
+		pblock->GetValue(pb_mpkftexture_basic_params_bitmap, t, ParamBitmap, ivalid);
 
 		ReloadActiveBitmap(false);
 
@@ -514,16 +492,33 @@ const MCHAR* MPKFTexture::GetTextureName()
 
 int32_t MPKFTexture::GetTexturesCount()
 {
-	return 1;
+	if (ParamBitmap == nullptr) {
+		return 0;
+	}
+
+	return ParamBitmap->bi.NumberFrames();
 }
 
-const MCHAR* MPKFTexture::GetTextureFileName(int32_t TextureIndex)
+const TSTR MPKFTexture::GetTextureFileName(int32_t TextureIndex)
 {
-	if (ActiveBitmap) {
-		BitmapInfo Info = ActiveBitmap->GetBitmapInfo();
-		return Info.GetPathEx().ConvertToAbsolute().GetString().data();
+	if (ParamBitmap == nullptr) {
+		return _T("");
 	}
-	return nullptr;
+
+	int PrevFrame = ParamBitmap->bi.SetCurrentFrame(TextureIndex);
+
+	BMMRES Status;
+	Bitmap* FrameBitmap = TheManager->Load(&ParamBitmap->bi, &Status);
+
+	if (Status != BMMRES_SUCCESS) {
+		return _T("");
+	}
+
+	TSTR Path = TSTR(FrameBitmap->GetBitmapInfo().Name());
+
+	FrameBitmap->DeleteThis();
+
+	return Path;
 }
 
 int32_t MPKFTexture::GetMipMapsNum()
@@ -592,11 +587,29 @@ RefResult MPKFTexture::NotifyRefChanged(const Interval& /*changeInt*/, RefTarget
 {
 	switch (message)
 	{
+	case REFMSG_CHANGE:
+	{
+		ivalid.SetEmpty();
+		if (hTarget == pblock)
+		{
+			ParamID changing_param = pblock->LastNotifyParamID();
+			mmpkftexture_param_blk.InvalidateUI(changing_param);
+		}
+		else {
+			LoadActiveBitmap(true);
+		}
+
+		break;
+	}
 	case REFMSG_TARGET_DELETED:
 	{
 		if (hTarget == pblock)
 		{
 			pblock = nullptr;
+		}
+		else {
+			ParamBitmap = nullptr;
+			LoadActiveBitmap(true);
 		}
 	}
 	}
@@ -625,15 +638,12 @@ Animatable* MPKFTexture::SubAnim(int i) {
 
 TSTR MPKFTexture::SubAnimName(int i, bool localized)
 {
-	// TODO: Return the sub-anim names
 	switch (i)
 	{
 	case 0:
-		return _T("Coordinates");
-	case 1:
 		return _T("Parameters");
 	default:
-		return GetSubTexmapTVName(i - 1, localized);
+		return _T("");
 	}
 }
 

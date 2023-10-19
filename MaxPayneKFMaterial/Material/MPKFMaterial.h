@@ -104,7 +104,7 @@ public:
 	KFDiffuseTextureShadingType GetDiffuseTextureShadingType() override;
 	bool HasEdgeBlend() override;
 	bool HasAlphaCompare() override;
-	float GetAlphaReferenceValue() override;
+	int GetAlphaReferenceValue() override;
 
 	bool HasAlphaTexture() override;
 	Texmap* GetAlphaTexture() override;

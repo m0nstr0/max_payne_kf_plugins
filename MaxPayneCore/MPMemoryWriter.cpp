@@ -1,9 +1,9 @@
 #include "MPMemoryWriter.h"
 #include <memory>
 
-void MPMemoryWriter::IncreaseCapacity()
+void MPMemoryWriter::IncreaseCapacity(size_t NewSize)
 {
-	size_t NewCapacity = _Capacity + 4094;
+	size_t NewCapacity = NewSize + 4096;
 	uint8_t* NewData = new uint8_t[NewCapacity];
 	
 	std::memset(NewData, 0, NewCapacity);
@@ -23,7 +23,7 @@ void MPMemoryWriter::WriteTag(uint8_t TagID)
 void MPMemoryWriter::Write(const void* Data, size_t Size)
 {
 	if (Size + _Position >= _Capacity) {
-		IncreaseCapacity();
+		IncreaseCapacity(Size + _Position);
 	}
 
 	std::memcpy(&_Data[_Position], Data, Size);
