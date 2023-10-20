@@ -824,9 +824,9 @@ bool MPKFExporter::BuildSkinBoneTree(IGameNode* Node, MPKFMeshExporterContext* C
 	return true;
 }
 
-IGameNode* GetBoneParentNode(IGameNode* Node, MPKFMeshExporterContext* Context, int& BoneIndex)
+INode* GetBoneParentNode(INode* Node, MPKFMeshExporterContext* Context, int& BoneIndex)
 {
-	IGameNode* BoneNode = Node;
+	INode* BoneNode = Node;
 
 	bool Found = false;
 	while (BoneNode != nullptr && !Found) {
@@ -839,25 +839,12 @@ IGameNode* GetBoneParentNode(IGameNode* Node, MPKFMeshExporterContext* Context, 
 		}
 
 		if (!Found) {
-			BoneNode = BoneNode->GetNodeParent();
+			BoneNode = BoneNode->GetParentNode();
 		}
-	}
-
-	if (Found && _tcscmp(Node->GetName(), BoneNode->GetName()) != 0) {
-		if (BoneIndex == 17) {
-			//std::string a = std::format("{}", BoneIndex);
-			OutputDebugString(_T("Bip01 Blink-L-Lower-Nub01"));
-		}
-
-		//OutputDebugString(Node->GetName());
-		//OutputDebugString(_T(" -> "));
-		//OutputDebugString(BoneNode->GetName());
-		//OutputDebugString(_T("\n"));
 	}
 
 	return BoneNode;
 }
-
 
 IGameNode* BuildBoneTree(IGameNode* Node, MPKFMeshExporterContext* Context, int& BoneIndex)
 {
@@ -869,6 +856,7 @@ bool MPKFExporter::PrepareKFMeshExportSkinContext(IGameNode* Node, IGameMesh* Me
 	IGameSkin* Skin = GameObject->GetIGameSkin();
 
 	if (!Skin || !ExportOptions.ExportSkinning) {
+		Context->HasSkin = false;
 		return true;
 	}
 
@@ -932,55 +920,14 @@ bool MPKFExporter::PrepareKFMeshExportSkinContext(IGameNode* Node, IGameMesh* Me
 	PhysiqueContext->AllowBlending(TRUE);
 	PhysiqueContext->ConvertToRigid(TRUE);
 
-
-	//Context->SkinVertexOffset.push_back(SkinVertexOffsetIndex);
-
-	const int NumberOfBones = 0;// Skin->GetNumberOfBones(Face->vert[i]);
-
-	if (NumberOfBones > 4 && ExportOptions.Game == 1) {
-		SHOW_ERROR(MPKFEXPORTER_ERROR_MP2_SKIN_BONES_NUM, Node->GetName());
-		return false;
-	}
-
-	if (NumberOfBones > 3 && ExportOptions.Game == 0) {
-		SHOW_ERROR(MPKFEXPORTER_ERROR_MP1_SKIN_BONES_NUM, Node->GetName());
-		return false;
-	}
-
-	std::map<int, float> BoneToWeight{};
-	float Sum{ 0.f };
-
-	for (int BoneID = 0; BoneID < NumberOfBones; BoneID++)
-	{
-		//const float Weight{ Skin->GetWeight(Face->vert[i], BoneID) };
-
-		int BoneNameIndex{ 0 };
-		//IGameNode* BoneNode = GetBoneParentNode(Skin->GetIGameBone(Face->vert[i], BoneID), Context, BoneNameIndex);
-
-		//if (!BoneNode) {
-			SHOW_ERROR(MPKFEXPORTER_ERROR_SKIN_NULL_BONE, BoneID);
-			return false;
-		//}
-
-		//if (BoneToWeight.contains(BoneNameIndex)) {
-		//	BoneToWeight[BoneNameIndex] += Weight;
-		//}
-		//else {
-		//	BoneToWeight[BoneNameIndex] = Weight;
-		//}
-
-		//Sum += Weight;
-	}
-
-	for (const auto& [BoneId, Weight] : BoneToWeight) {
-		//LocalBonesIDsPerVertex.push_back(BoneId);
-		//LocalWeightsPerVertex.push_back(Weight / Sum);
-	}
-
-	//LocalBonesNumPerVertex.push_back(BoneToWeight.size());
-	//SkinVertexOffsetIndex += BoneToWeight.size();
+	int SkinVertexOffsetIndex{ 0 };
 
 	for (int VertexIndex : Context->MeshMaxVertexIndex) {
+		std::map<int, float> BoneToWeight{};
+		float Sum{ 0.f };
+
+		Context->SkinVertexOffset.push_back(SkinVertexOffsetIndex);
+
 		IPhyVertexExport* PhyVertexInterface = PhysiqueContext->GetVertexInterface(VertexIndex);
 		if (!PhyVertexInterface) {
 			SHOW_ERROR(_T("Unable to initialize Physique Vertex interface"));
@@ -991,30 +938,52 @@ bool MPKFExporter::PrepareKFMeshExportSkinContext(IGameNode* Node, IGameMesh* Me
 		{
 			IPhyRigidVertex* rv = (IPhyRigidVertex*)PhyVertexInterface;
 
-			INode* n = rv->GetNode();
+			int BoneNameIndex{ 0 };
+			INode* BoneNode = GetBoneParentNode(rv->GetNode(), Context, BoneNameIndex);
+			
+			if (BoneNode == nullptr) {
+				SHOW_ERROR(MPKFEXPORTER_ERROR_SKIN_NULL_BONE, VertexIndex);
+				return false;
+			}
 
-			//Bones.insert(TSTR(n->GetName()));
-			//OutputDebugString(n->GetName());
-			//OutputDebugString(_T("\n"));
+			BoneToWeight[BoneNameIndex] = 1.f;
 
-			//assert(n != NULL);
-
-			//boneVertices_.push_back(BoneVertex(p, boneIndex(n)));
+			Sum = 1.f;
 		}
 		else if (PhyVertexInterface->GetVertexType() == RIGID_BLENDED_TYPE)
 		{
 			IPhyBlendedRigidVertex* rbv = (IPhyBlendedRigidVertex*)PhyVertexInterface;
-			int nNodes = rbv->GetNumberNodes();
-			for (int i = 0; i < nNodes; i++) {
-				INode* n = rbv->GetNode(i);
-				
-				if (n == nullptr) {
-					SHOW_ERROR(MPKFEXPORTER_ERROR_SKIN_NULL_BONE, i);
+			int NumberOfBones = rbv->GetNumberNodes();
+
+			if (NumberOfBones > 4 && ExportOptions.Game == 1) {
+				SHOW_ERROR(MPKFEXPORTER_ERROR_MP2_SKIN_BONES_NUM, Node->GetName());
+				return false;
+			}
+
+			if (NumberOfBones > 3 && ExportOptions.Game == 0) {
+				SHOW_ERROR(MPKFEXPORTER_ERROR_MP1_SKIN_BONES_NUM, Node->GetName());
+				return false;
+			}
+
+			for (int BoneID = 0; BoneID < NumberOfBones; BoneID++) {
+				int BoneNameIndex{ 0 };
+				INode* BoneNode = GetBoneParentNode(rbv->GetNode(BoneID), Context, BoneNameIndex);
+
+				if (BoneNode == nullptr) {
+					SHOW_ERROR(MPKFEXPORTER_ERROR_SKIN_NULL_BONE, VertexIndex);
 					return false;
 				}
-				//Bones.insert(TSTR(n->GetName()));
-				//OutputDebugString(n->GetName());
-				//OutputDebugString(_T("\n"));
+
+				const float Weight{ rbv->GetWeight(BoneID) };
+
+				if (BoneToWeight.contains(BoneNameIndex)) {
+					BoneToWeight[BoneNameIndex] += Weight;
+				}
+				else {
+					BoneToWeight[BoneNameIndex] = Weight;
+				}
+
+				Sum += Weight;
 			}
 		} 
 		else 
@@ -1025,29 +994,18 @@ bool MPKFExporter::PrepareKFMeshExportSkinContext(IGameNode* Node, IGameMesh* Me
 
 		PhysiqueContext->ReleaseVertexInterface(PhyVertexInterface);
 
-		IPhyFloatingVertex* FloatingVertex = PhysiqueContext->GetFloatingVertexInterface(VertexIndex);
-		if (FloatingVertex) {
-			int nNodes = FloatingVertex->GetNumberNodes();
-			for (int i = 0; i < nNodes; i++) {
-				INode* n = FloatingVertex->GetNode(i);
-
-				if (n == nullptr) {
-					SHOW_ERROR(MPKFEXPORTER_ERROR_SKIN_NULL_BONE, i);
-					return false;
-				}
-
-				//Bones.insert(TSTR(n->GetName()));
-			}
-
-			PhysiqueContext->ReleaseVertexInterface(FloatingVertex);
+		for (auto& [BoneId, Weight] : BoneToWeight) {
+			Context->SkinBonesIDsPerVertex.push_back(BoneId);
+			Context->SkinWeightsPerVertex.push_back(Weight / Sum);
 		}
+
+		Context->SkinBonesNumPerVertex.push_back(BoneToWeight.size());
+		SkinVertexOffsetIndex += BoneToWeight.size();
 	}
 
-
-	//size_t b = Bones.size();
-
-
 	PhysiqueInterface->ReleaseContextInterface(PhysiqueContext);
+
+	return true;
 }
 
 bool MPKFExporter::PrepareKFMeshExportContext(IGameNode* Node, IGameMesh* Mesh, IGameObject* GameObject, MPKFGlobalExporterContext* GlobalContext, MPKFMeshExporterContext* Context)
@@ -1058,57 +1016,11 @@ bool MPKFExporter::PrepareKFMeshExportContext(IGameNode* Node, IGameMesh* Mesh, 
 		return false;
 	}
 
-	IGameSkin* Skin = GameObject->GetIGameSkin();
-
-	if (Skin && ExportOptions.ExportSkinning) {
-
-		Context->HasSkin = true;
-
-		if (Skin->GetTotalSkinBoneCount() == 0) {
-			SHOW_ERROR(MPKFEXPORTER_ERROR_SKIN_NULL_BONES);
-			return false;
-		}
-
-		if (Mesh->GetNumberOfVerts() != Skin->GetNumOfSkinnedVerts()) {
-			SHOW_ERROR(MPKFEXPORTER_ERROR_SKIN_FREE_VERTEX, Node->GetName());
-			return false;
-		}
-
-		IGameNode* RootBone = nullptr;
-		for (int BoneID = 0; BoneID < Skin->GetTotalBoneCount(); BoneID++) {
-			IGameNode* Bone = Skin->GetIGameBone(BoneID, true);
-			if (Bone == nullptr) {
-				SHOW_ERROR(MPKFEXPORTER_ERROR_SKIN_NULL_BONE, BoneID);
-				return false;
-			}
-			while (Bone != nullptr) {
-				if (Bone->GetNodeParent() == nullptr) {
-					if (RootBone != nullptr && RootBone != Bone) {
-						SHOW_ERROR(MPKFEXPORTER_ERROR_SKIN_MORE_THAN_ONE_ROOT);
-						return false;
-					}
-					RootBone = Bone;
-					break;
-				}
-				Bone = Bone->GetNodeParent();
-			}
-		}
-
-		if (!BuildSkinBoneTree(RootBone, Context)) {
-			return false;
-		}
-
-		Context->SkinObjectName = TSTR(Node->GetName());
-	}
-
 	std::vector<MPVector3> LocalNormals;
 	std::vector<MPVector2> LocalTexVertices;
 	std::vector<MPVector3> LocalVertices;
 	std::vector<uint16_t> LocalIndices;
 	std::map<uint16_t, std::map<uint16_t, std::map<uint16_t, uint16_t>>> MaxVertexToLocal;
-	std::vector<int> LocalBonesNumPerVertex;
-	std::vector<float> LocalWeightsPerVertex;
-	std::vector<int> LocalBonesIDsPerVertex;
 
 	Context->MeshVertices.clear();
 	Context->MeshTexVertices.clear();
@@ -1117,8 +1029,6 @@ bool MPKFExporter::PrepareKFMeshExportContext(IGameNode* Node, IGameMesh* Mesh, 
 	Context->MeshVerticesPerPrimitive.clear();
 	Context->MeshIndicesPerPrimitive.clear();
 	Context->MaterialPerPrimitive.clear();
-
-	int SkinVertexOffsetIndex = 0;
 
 	std::map<int, std::vector<int>> MaterialGroups;
 
@@ -1151,9 +1061,7 @@ bool MPKFExporter::PrepareKFMeshExportContext(IGameNode* Node, IGameMesh* Mesh, 
 		LocalIndices.clear();
 		LocalTexVertices.clear();
 		MaxVertexToLocal.clear();
-		LocalBonesNumPerVertex.clear();
-		LocalWeightsPerVertex.clear();
-
+	
 		for (int FaceID : MaterialIter.second)
 		{
 			FaceEx* Face = Mesh->GetFace(FaceID);
@@ -1169,56 +1077,6 @@ bool MPKFExporter::PrepareKFMeshExportContext(IGameNode* Node, IGameMesh* Mesh, 
 
 				MaxVertexToLocal[Face->vert[i]][Face->norm[i]][Face->texCoord[i]] = LocalVertices.size();
 				Context->MeshMaxVertexIndex.push_back(Face->vert[i]);
-
-				if (Skin && ExportOptions.ExportSkinning) 
-				{
-					Context->SkinVertexOffset.push_back(SkinVertexOffsetIndex);
-
-					const int NumberOfBones = Skin->GetNumberOfBones(Face->vert[i]);
-
-					if (NumberOfBones > 4 && ExportOptions.Game == 1) {
-						SHOW_ERROR(MPKFEXPORTER_ERROR_MP2_SKIN_BONES_NUM, Node->GetName());
-						return false;
-					}
-
-					if (NumberOfBones > 3 && ExportOptions.Game == 0) {
-						SHOW_ERROR(MPKFEXPORTER_ERROR_MP1_SKIN_BONES_NUM, Node->GetName());
-						return false;
-					}
-
-					std::map<int, float> BoneToWeight{};
-					float Sum{ 0.f };
-
-					for (int BoneID = 0; BoneID < NumberOfBones; BoneID++)
-					{
-						const float Weight{ Skin->GetWeight(Face->vert[i], BoneID) };
-
-						int BoneNameIndex{ 0 };
-						IGameNode* BoneNode = GetBoneParentNode(Skin->GetIGameBone(Face->vert[i], BoneID), Context, BoneNameIndex);
-
-						if (!BoneNode) {
-							SHOW_ERROR(MPKFEXPORTER_ERROR_SKIN_NULL_BONE, BoneID);
-							return false;
-						}
-
-						if (BoneToWeight.contains(BoneNameIndex)) {
-							BoneToWeight[BoneNameIndex] += Weight;
-						}
-						else {
-							BoneToWeight[BoneNameIndex] = Weight;
-						}
-
-						Sum += Weight;
-					}
-
-					for (const auto& [BoneId, Weight] : BoneToWeight) {
-						LocalBonesIDsPerVertex.push_back(BoneId);
-						LocalWeightsPerVertex.push_back(Weight / Sum);
-					}
-
-					LocalBonesNumPerVertex.push_back(BoneToWeight.size());
-					SkinVertexOffsetIndex += BoneToWeight.size();
-				}
 				
 				float ScaleValue = 1.f;
 				if (ExportOptions.Scale) {
@@ -1254,24 +1112,14 @@ bool MPKFExporter::PrepareKFMeshExportContext(IGameNode* Node, IGameMesh* Mesh, 
 			Context->MeshIndices.push_back(Index);
 		}
 
-		for (int Index : LocalBonesNumPerVertex) {
-			Context->SkinBonesNumPerVertex.push_back(Index);
-		}
-
-		for (float Index : LocalWeightsPerVertex) {
-			Context->SkinWeightsPerVertex.push_back(Index);
-		}
-
-		for (int Index : LocalBonesIDsPerVertex) {
-			Context->SkinBonesIDsPerVertex.push_back(Index);
-		}
-
 		Context->MeshVerticesPerPrimitive.push_back(LocalVertices.size());
 
 		Context->MeshIndicesPerPrimitive.push_back(LocalIndices.size());
 	}
 
-	//PrepareKFMeshExportSkinContext(Node, Mesh, GameObject, GlobalContext, Context);
+	if (!PrepareKFMeshExportSkinContext(Node, Mesh, GameObject, GlobalContext, Context)) {
+		return false;
+	}
 
 	return true;
 }
