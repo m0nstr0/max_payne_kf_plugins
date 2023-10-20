@@ -136,6 +136,8 @@ private:
 
 	bool BuildSkinBoneTree(class IGameNode* Node, class MPKFMeshExporterContext* Context);
 
+	bool PrepareKFMeshExportSkinContext2(class IGameNode* Node, class IGameMesh* Mesh, class IGameObject* GameObject, class MPKFGlobalExporterContext* GlobalContext, class MPKFMeshExporterContext* Context);
+
 	bool PrepareKFMeshExportSkinContext(class IGameNode* Node, class IGameMesh* Mesh, class IGameObject* GameObject, class MPKFGlobalExporterContext* GlobalContext, class MPKFMeshExporterContext* Context);
 
 	bool PrepareKFMeshExportContext(class IGameNode* Node, class IGameMesh* Mesh, class IGameObject* GameObject, class MPKFGlobalExporterContext* GlobalContext, class MPKFMeshExporterContext* Context);
