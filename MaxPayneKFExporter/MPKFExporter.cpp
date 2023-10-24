@@ -33,6 +33,8 @@
 #define MPKFEXPORTER_ERROR_SKIN_NULL_BONE					_T("Bone with index \"{}\" not found")
 #define MPKFEXPORTER_ERROR_SKIN_NULL_BONES					_T("There are no bones")
 #define MPKFEXPORTER_ERROR_SKIN_MORE_THAN_ONE_ROOT			_T("There are more than one root bone")
+#define MPKFEXPORTER_ERROR_SKIN_NOT_FOUND					_T("Skin or Physique modifier not found")
+#define MPKFEXPORTER_ERROR_SKIN_WRONG_VERTEX_TYPE			_T("Unknown vertex type. Only RIGID and RIGI_BLENDED are supported")
 
 #define MPKFEXPORTER_ERROR_HIERARCHY_HIDDEN_HAS_CHILD		_T("Texture \"{}\" has only \"{}\" frames but the field Start Frame is set to \"{}\"")
 #define MPKFEXPORTER_ERROR_HIERARCHY_HIDDEN_HAS_CHILD		_T("Texture \"{}\" has only \"{}\" frames but the field Start Frame is set to \"{}\"")
@@ -71,6 +73,26 @@ bool IsASCII(const MCHAR* Str, size_t Length = -1)
 	return true;
 }
 
+struct MPKFAnimationFrameExporterContext
+{
+	uint32_t FrameID;
+	GMatrix Transform;
+};
+
+struct MPKFAnimationExporterContext 
+{
+	TSTR ObjectName;
+	TSTR ParentName;
+	int32_t SampleRate;
+	bool LoopWhenFinished;
+	bool LoopInterpolation;
+	uint32_t NumTotalKeyFrames;
+	std::vector<MPKFAnimationFrameExporterContext> Frames;
+	uint32_t LoopToFrame;
+	int32_t FrameToFrameRotationInterpolation;
+	bool MaintainMatrixScaling;
+};
+
 struct MPKFMeshExporterContext
 {
 	std::vector<MPVector3> MeshVertices;
@@ -83,11 +105,12 @@ struct MPKFMeshExporterContext
 	std::vector<IGameMaterial*> MaterialPerPrimitive;
 	TSTR SkinObjectName;
 	bool HasSkin;
-	std::vector<TSTR> SkinBoneNames;
+	std::vector<IGameNode*> SkinBones;
 	std::vector<int> SkinBonesNumPerVertex;
 	std::vector<float> SkinWeightsPerVertex;
 	std::vector<int> SkinBonesIDsPerVertex;
 	std::vector<int> SkinVertexOffset;
+	std::vector<MPKFAnimationExporterContext> Animations;
 };
 
 struct MPKFNodeInfo
@@ -101,7 +124,9 @@ struct MPKFNodeInfo
 struct MPKFGlobalExporterContext
 {
 	MPMemoryWriter TargetMemoryWriter;
+	MPMemoryWriter SkinMemoryWriter;
 	MPMemoryWriter OtherMemoryWriter;
+	MPMemoryWriter AnimationMemoryWriter;
 	MPMemoryWriter MaterialMemoryWriter;
 	std::vector<IGameMaterial*> Materials;
 	std::vector<MPKFNodeInfo> Nodes;
@@ -147,9 +172,6 @@ INT_PTR CALLBACK KFExportDlgProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 			SampleValueSpin->SetLimits(1, 500, TRUE);
 			SampleValueSpin->SetScale(1);
 			SampleValueSpin->SetValue(30, FALSE);
-			//<=== USUPORTED
-			SampleValueSpin->Enable(FALSE);
-			//<=== USUPORTED
 			ReleaseISpinner(SampleValueSpin);
 
 			StartFrameSpin = GetISpinner(GetDlgItem(hWnd, IDC_KF_EXPORTER_START_FRAME_SPIN));
@@ -157,9 +179,6 @@ INT_PTR CALLBACK KFExportDlgProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 			StartFrameSpin->SetLimits(0, 100, TRUE);
 			StartFrameSpin->SetScale(1);
 			StartFrameSpin->SetValue(0, FALSE);
-			//<=== USUPORTED
-			StartFrameSpin->Enable(FALSE);
-			//<=== USUPORTED
 			ReleaseISpinner(StartFrameSpin);
 
 			EndFrameSpin = GetISpinner(GetDlgItem(hWnd, IDC_KF_EXPORTER_END_FRAME_SPIN));
@@ -167,9 +186,6 @@ INT_PTR CALLBACK KFExportDlgProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 			EndFrameSpin->SetLimits(0, 100, TRUE);
 			EndFrameSpin->SetScale(1);
 			EndFrameSpin->SetValue(100, FALSE);
-			//<=== USUPORTED
-			EndFrameSpin->Enable(FALSE);
-			//<=== USUPORTED
 			ReleaseISpinner(EndFrameSpin);
 
 			MinPosSpin = GetISpinner(GetDlgItem(hWnd, IDC_KF_EXPORTER_MIN_POS_SPIN));
@@ -177,9 +193,6 @@ INT_PTR CALLBACK KFExportDlgProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 			MinPosSpin->SetLimits(0.f, 100.f, TRUE);
 			MinPosSpin->SetScale(0.1f);
 			MinPosSpin->SetValue(0.001f, FALSE);
-			//<=== USUPORTED
-			MinPosSpin->Enable(FALSE);
-			//<=== USUPORTED
 			ReleaseISpinner(MinPosSpin);
 			
 			MinRotSpin = GetISpinner(GetDlgItem(hWnd, IDC_KF_EXPORTER_MIN_ROT_SPIN));
@@ -187,9 +200,6 @@ INT_PTR CALLBACK KFExportDlgProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 			MinRotSpin->SetLimits(0.f, 100.f, TRUE);
 			MinRotSpin->SetScale(0.1f);
 			MinRotSpin->SetValue(0.001f, FALSE);
-			//<=== USUPORTED
-			MinRotSpin->Enable(FALSE);
-			//<=== USUPORTED
 			ReleaseISpinner(MinRotSpin);
 
 			LoopToFrameSpin = GetISpinner(GetDlgItem(hWnd, IDC_KF_EXPORTER_LOOP_TO_FRAME_SPIN));
@@ -197,9 +207,6 @@ INT_PTR CALLBACK KFExportDlgProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 			LoopToFrameSpin->SetLimits(0, 100, TRUE);
 			LoopToFrameSpin->SetScale(1);
 			LoopToFrameSpin->SetValue(0, FALSE);
-			//<=== USUPORTED
-			LoopToFrameSpin->Enable(FALSE);
-			//<=== USUPORTED
 			ReleaseISpinner(LoopToFrameSpin);
 
 			SendMessage(GetDlgItem(hWnd, IDC_KF_EXPORTER_INTERPOLATION_VALUE), CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(_T("None")));
@@ -229,22 +236,9 @@ INT_PTR CALLBACK KFExportDlgProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 			EnableWindow(GetDlgItem(hWnd, IDC_KF_EXPORTER_MAINTAIN_MATRIX), FALSE);
 
 			Edit_SetText(GetDlgItem(hWnd, IDC_KF_EXPORTER_SKINNING_POSTFIX), _T("_skin.skd"));
+			EnableWindow(GetDlgItem(hWnd, IDC_KF_EXPORTER_SKINNING_POSTFIX), FALSE);
 
 			//Start unsupporter stuff
-			EnableWindow(GetDlgItem(hWnd, IDC_KF_EXPORTER_LOOP_INTERP), FALSE);
-			EnableWindow(GetDlgItem(hWnd, IDC_KF_EXPORTER_LOOP_DEC_FRAME), FALSE);
-
-			Button_SetCheck(GetDlgItem(hWnd, IDC_KF_EXPORTER_MAINTAIN_MATRIX), FALSE);
-			EnableWindow(GetDlgItem(hWnd, IDC_KF_EXPORTER_MAINTAIN_MATRIX), FALSE);
-
-			EnableWindow(GetDlgItem(hWnd, IDC_KF_EXPORTER_INTERPOLATION_VALUE), FALSE);
-
-			Button_SetCheck(GetDlgItem(hWnd, IDC_KF_EXPORTER_USE_GLOBAL_ANIMATION), FALSE);
-			EnableWindow(GetDlgItem(hWnd, IDC_KF_EXPORTER_USE_GLOBAL_ANIMATION), FALSE);
-
-			Button_SetCheck(GetDlgItem(hWnd, IDC_KF_EXPORTER_LOOP), FALSE);
-			EnableWindow(GetDlgItem(hWnd, IDC_KF_EXPORTER_LOOP), FALSE);
-
 			Button_SetCheck(GetDlgItem(hWnd, IDC_KF_EXPORTER_SAVE_REFS), FALSE);
 			EnableWindow(GetDlgItem(hWnd, IDC_KF_EXPORTER_SAVE_REFS), FALSE);
 
@@ -254,9 +248,6 @@ INT_PTR CALLBACK KFExportDlgProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 			Button_SetCheck(GetDlgItem(hWnd, IDC_KF_EXPORTER_FLOATING_VERTICES), FALSE);
 			EnableWindow(GetDlgItem(hWnd, IDC_KF_EXPORTER_FLOATING_VERTICES), FALSE);
 			
-			Button_SetCheck(GetDlgItem(hWnd, IDC_KF_EXPORTER_ANIMATIONS), FALSE);
-			EnableWindow(GetDlgItem(hWnd, IDC_KF_EXPORTER_ANIMATIONS), FALSE);
-
 			Button_SetCheck(GetDlgItem(hWnd, IDC_KF_EXPORTER_CAMERAS), FALSE);
 			EnableWindow(GetDlgItem(hWnd, IDC_KF_EXPORTER_CAMERAS), FALSE);
 
@@ -308,6 +299,21 @@ INT_PTR CALLBACK KFExportDlgProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 					ReleaseISpinner(ScaleValueSpin);
 				}
 				return TRUE;
+			case IDC_KF_EXPORTER_GEOMETRY:
+				if (IsDlgButtonChecked(hWnd, IDC_KF_EXPORTER_GEOMETRY) == BST_CHECKED) {
+					EnableWindow(GetDlgItem(hWnd, IDC_KF_EXPORTER_SKINNING), TRUE);
+					if (IsDlgButtonChecked(hWnd, IDC_KF_EXPORTER_SKINNING) == BST_CHECKED) {
+						EnableWindow(GetDlgItem(hWnd, IDC_KF_EXPORTER_SKINNING_POSTFIX), TRUE);
+					}
+					else {
+						EnableWindow(GetDlgItem(hWnd, IDC_KF_EXPORTER_SKINNING_POSTFIX), FALSE);
+					}
+				}
+				else {
+					EnableWindow(GetDlgItem(hWnd, IDC_KF_EXPORTER_SKINNING), FALSE);
+					EnableWindow(GetDlgItem(hWnd, IDC_KF_EXPORTER_SKINNING_POSTFIX), FALSE);
+				}
+				return TRUE;
 			case IDC_KF_EXPORTER_SKINNING:
 				if (IsDlgButtonChecked(hWnd, IDC_KF_EXPORTER_SKINNING) == BST_CHECKED) {
 					EnableWindow(GetDlgItem(hWnd, IDC_KF_EXPORTER_SKINNING_POSTFIX), TRUE);
@@ -335,7 +341,6 @@ INT_PTR CALLBACK KFExportDlgProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 				Options->RemoveHiddenObjects = IsDlgButtonChecked(hWnd, IDC_KF_EXPORTER_HIDDEN_OBJECTS) == BST_CHECKED;
 				Options->UsePivotAsMeshCenter = IsDlgButtonChecked(hWnd, IDC_KF_EXPORTER_USE_PIVOT) == BST_CHECKED;
 				Options->Game = IsDlgButtonChecked(hWnd, IDC_KF_EXPORTER_MP1) == BST_CHECKED ? 0 : 1;
-				Options->ExportSkeleton = IsDlgButtonChecked(hWnd, IDC_KF_EXPORTER_SKELETON) == BST_CHECKED;
 				ScaleValueSpin = GetISpinner(GetDlgItem(hWnd, IDC_KF_EXPORTER_SCALE_SPIN));
 				Options->ScaleValue = ScaleValueSpin->GetFVal();
 				ReleaseISpinner(ScaleValueSpin);
@@ -462,11 +467,26 @@ int MPKFExporter::DoExport(const MCHAR *name, ExpInterface *ei, Interface *i, BO
 
 	GlobalContext.TargetMemoryWriter.Write(GlobalContext.OtherMemoryWriter.GetData(), GlobalContext.OtherMemoryWriter.GetSize());
 
+	if (ExportOptions.ExportAnimations) {
+		GlobalContext.TargetMemoryWriter.Write(GlobalContext.AnimationMemoryWriter.GetData(), GlobalContext.AnimationMemoryWriter.GetSize());
+	}
+
 	FILE* OutputFile = _tfopen(name, _T("wb"));
 
 	fwrite(GlobalContext.TargetMemoryWriter.GetData(), GlobalContext.TargetMemoryWriter.GetSize(), 1, OutputFile);
 
 	fclose(OutputFile);
+
+	if (ExportOptions.ExportSkinning && ExportOptions.ExportGeometry) 
+	{
+		TSTR SkinFile = FileName + ExportOptions.SkinningPostfix;
+
+		FILE* OutputFile = _tfopen(SkinFile.data(), _T("wb"));
+
+		fwrite(GlobalContext.SkinMemoryWriter.GetData(), GlobalContext.SkinMemoryWriter.GetSize(), 1, OutputFile);
+
+		fclose(OutputFile);
+	}
 
 	MaxSDK::MaxMessageBox(GetMaxHWND(), _T("Exported"), _T("Info"), MB_OK | MB_ICONINFORMATION);
 
@@ -515,7 +535,7 @@ bool MPKFExporter::PrepareNodesList(IGameNode* Node, MPKFGlobalExporterContext* 
 	switch (Type)
 	{
 	case IGameObject::IGAME_MESH: {
-		if (!ExportOptions.ExportGeometry && !ExportOptions.ExportSkinning) {
+		if (!ExportOptions.ExportGeometry && !ExportOptions.ExportSkinning && !ExportOptions.ExportAnimations) {
 			Export = false;
 		}
 		break;
@@ -536,9 +556,7 @@ bool MPKFExporter::PrepareNodesList(IGameNode* Node, MPKFGlobalExporterContext* 
 		}
 		break;
 	case IGameObject::IGAME_BONE:
-		if (!ExportOptions.ExportSkinning) {
-			Export = false;
-		}
+		Export = false;
 		break;
 	default:
 		SHOW_ERROR(MPKFEXPORTER_ERROR_UNSUPPORTED_OBJECTS, Node->GetName());
@@ -597,12 +615,19 @@ bool MPKFExporter::DoExportNode(IGameNode* Node, MPKFGlobalExporterContext* Glob
 			MeshChunk.reset();
 		}
 
-		if (ExportOptions.ExportSkinning) {
-			std::unique_ptr<MPMemoryChunkWriter> SkinChunk{ GlobalContext->OtherMemoryWriter.CreateChunk(0x0C, MPKFTYPE_SKIN_CHUNK_ID, 1) };
+		if (ExportOptions.ExportAnimations) {
+			if (!DoExportKFAnimation(Node, &Context, GlobalContext)) {
+				Node->ReleaseIGameObject();
+				return false;
+			}
+		}
+
+		if (ExportOptions.ExportSkinning && ExportOptions.ExportGeometry) {
+			std::unique_ptr<MPMemoryChunkWriter> SkinChunk{ GlobalContext->SkinMemoryWriter.CreateChunk(0x0C, MPKFTYPE_SKIN_CHUNK_ID, 1) };
 			if (!DoExportKFSkinning(&Context, SkinChunk.get())) {
 				return false;
 			}
-			GlobalContext->OtherMemoryWriter << SkinChunk.get();
+			GlobalContext->SkinMemoryWriter << SkinChunk.get();
 			SkinChunk.reset();
 		}
 		break;
@@ -613,23 +638,9 @@ bool MPKFExporter::DoExportNode(IGameNode* Node, MPKFGlobalExporterContext* Glob
 		break;
 	case IGameObject::IGAME_HELPER:
 		break;
-	case IGameObject::IGAME_BONE: {
-		//std::unique_ptr<MPMemoryChunkWriter> MeshChunk{ GlobalContext->OtherMemoryWriter.CreateChunk(0x0C, MPKFTYPE_MESH_CHUNK_ID, 2) };
-		//if (!DoExportKFMesh(Node, &Context, MeshChunk.get())) {
-		//	return false;
-		//}
-		//GlobalContext->OtherMemoryWriter << MeshChunk.get();
-		//MeshChunk.reset();
-		break;
-	}
 	}
 
 	Node->ReleaseIGameObject();
-
-	bool ExportSkinning{ false };
-	bool ExportMaterials{ false };
-	bool ExportAnimations{ false };
-	bool ExportEnvironmets{ false };
 
 	return true;
 }
@@ -725,9 +736,9 @@ bool MPKFExporter::DoExportKFSkinning(MPKFMeshExporterContext* Context, MPMemory
 	WRITE_ASCII_STRING(SkinObjectName, Context->SkinObjectName.data(), ChunkWriter);
 
 	ChunkWriter->WriteTag(0x1C);
-	*ChunkWriter << static_cast<int32_t>(Context->SkinBoneNames.size());
-	for (TSTR& BoneName : Context->SkinBoneNames) {
-		WRITE_ASCII_STRING(SkinBoneName, BoneName.data(), ChunkWriter);
+	*ChunkWriter << static_cast<int32_t>(Context->SkinBones.size());
+	for (IGameNode* Bone : Context->SkinBones) {
+		WRITE_ASCII_STRING(SkinBoneName, Bone->GetName(), ChunkWriter);
 	}
 
 	ChunkWriter->WriteTag(0x1C);
@@ -817,7 +828,7 @@ bool MPKFExporter::BuildSkinBoneTree(IGameNode* Node, MPKFMeshExporterContext* C
 
 	IS_ASCII_STRING(Node->GetName());
 	
-	Context->SkinBoneNames.push_back(TSTR(Node->GetName()));
+	Context->SkinBones.push_back(Node);
 
 	for (int NodeID = 0; NodeID < Node->GetChildCount(); NodeID++) {
 		if (!BuildSkinBoneTree(Node->GetNodeChild(NodeID), Context)) {
@@ -834,8 +845,8 @@ INode* GetBoneParentNode(INode* Node, MPKFMeshExporterContext* Context, int& Bon
 
 	bool Found = false;
 	while (BoneNode != nullptr && !Found) {
-		for (size_t BoneNameIndex = 0; BoneNameIndex < Context->SkinBoneNames.size(); BoneNameIndex++) {
-			if (Context->SkinBoneNames[BoneNameIndex] == TSTR(BoneNode->GetName())) {
+		for (size_t BoneNameIndex = 0; BoneNameIndex < Context->SkinBones.size(); BoneNameIndex++) {
+			if (TSTR(Context->SkinBones[BoneNameIndex]->GetName()) == TSTR(BoneNode->GetName())) {
 				Found = true;
 				BoneIndex = BoneNameIndex;
 				break;
@@ -850,21 +861,103 @@ INode* GetBoneParentNode(INode* Node, MPKFMeshExporterContext* Context, int& Bon
 	return BoneNode;
 }
 
-IGameNode* BuildBoneTree(IGameNode* Node, MPKFMeshExporterContext* Context, int& BoneIndex)
+bool MPKFExporter::PrepareKFMeshExportAnimationContext(IGameNode* Node, IGameMesh* Mesh, IGameObject* GameObject, MPKFGlobalExporterContext* GlobalContext, MPKFMeshExporterContext* Context)
 {
-	return nullptr;
-}
-
-bool MPKFExporter::PrepareKFMeshExportSkinContext2(IGameNode* Node, IGameMesh* Mesh, IGameObject* GameObject, MPKFGlobalExporterContext* GlobalContext, MPKFMeshExporterContext* Context)
-{
-	IGameSkin* Skin = GameObject->GetIGameSkin();
-
-	if (!Skin || !ExportOptions.ExportSkinning) {
-		Context->HasSkin = false;
+	if (!ExportOptions.ExportAnimations) {
 		return true;
 	}
 
-	Context->HasSkin = true;
+	IGameControl* AnimControl = Node->GetIGameControl();
+
+	IGameKeyTab TMKeys;
+	if (!AnimControl->GetFullSampledKeys(TMKeys, 1, IGameControlType::IGAME_TM, true)) {
+		return false;
+	}
+
+	MPKFAnimationExporterContext Animation;
+
+	Animation.ObjectName = TSTR(Node->GetName());
+	Animation.ParentName = _T("");
+
+	if (Node->GetNodeParent() != nullptr) {
+		Animation.ParentName = TSTR(Node->GetNodeParent()->GetName());
+	}
+
+	Animation.SampleRate = ExportOptions.SampleRate;
+	Animation.LoopWhenFinished = ExportOptions.LoopWhenFinished;
+	Animation.LoopInterpolation = ExportOptions.LoopInterpolation;
+	Animation.LoopToFrame = ExportOptions.LoopToFrame;
+	Animation.FrameToFrameRotationInterpolation = ExportOptions.FrameToFrameRotationInterpolation;
+	Animation.NumTotalKeyFrames = ExportOptions.EndFrame - ExportOptions.StartFrame;
+	Animation.MaintainMatrixScaling = ExportOptions.MaintainMatrixScaling;
+
+	int SceneTicks = IGameExporter->GetSceneTicks();
+
+	uint32_t ActualFrame{ 0 };
+
+	Point3 PrevFramePos;
+	Quat PrevFrameRot;
+
+	int PrevFrameID = -1;
+
+	for (int KeyIndex = 0; KeyIndex < TMKeys.Count(); KeyIndex++) {
+		
+		IGameKey Key = TMKeys[KeyIndex];
+
+		int FrameID = Key.t / 180;
+
+		if (FrameID == PrevFrameID) {
+			continue;
+		}
+
+		PrevFrameID = FrameID;
+
+		if (FrameID >= ExportOptions.StartFrame && FrameID <= ExportOptions.EndFrame) {
+			GMatrix Matrix = Key.sampleKey.gval;
+
+			if (ActualFrame == 0) {
+				Point3 PrevFramePos = Matrix.Translation();
+				Quat Rot = Matrix.Rotation();
+				//Rot.GetEuler(&PrevFrameRot.x, &PrevFrameRot.y, PrevFrameRot.z);
+				Animation.Frames.push_back({ ActualFrame , Key.sampleKey.gval });
+				ActualFrame++;
+				continue;
+			}
+
+			Point3 Pos = Matrix.Translation();
+			Quat Rot = Matrix.Rotation();
+
+			if (Rot.Equals(PrevFrameRot, ExportOptions.MinDeltaRotation) && Pos.Equals(PrevFramePos, ExportOptions.MinDeltaPosition)) {
+				ActualFrame++;
+				continue;
+			}
+
+			PrevFramePos = Pos;
+			PrevFrameRot = Rot;
+
+			Animation.Frames.push_back({ ActualFrame , Matrix });
+			ActualFrame++;
+		}
+	}
+
+	Context->Animations.push_back(Animation);
+
+	return true;
+}
+
+bool MPKFExporter::PrepareKFMeshExportSkinContext(IGameNode* Node, IGameMesh* Mesh, IGameObject* GameObject, MPKFGlobalExporterContext* GlobalContext, MPKFMeshExporterContext* Context)
+{
+	IGameSkin* Skin = GameObject->GetIGameSkin();
+
+	if (!Skin && ExportOptions.ExportSkinning) {
+		SHOW_ERROR(MPKFEXPORTER_ERROR_SKIN_NOT_FOUND);
+		return false;
+	}
+
+	if (!Skin) {
+		Context->HasSkin = false;
+		return true;
+	}
 
 	if (Skin->GetTotalSkinBoneCount() == 0) {
 		SHOW_ERROR(MPKFEXPORTER_ERROR_SKIN_NULL_BONES);
@@ -899,6 +992,20 @@ bool MPKFExporter::PrepareKFMeshExportSkinContext2(IGameNode* Node, IGameMesh* M
 	if (!BuildSkinBoneTree(RootBone, Context)) {
 		return false;
 	}
+
+	if (ExportOptions.ExportAnimations) {
+		for (IGameNode* Bone : Context->SkinBones) {
+			if (!PrepareKFMeshExportAnimationContext(Bone, Mesh, GameObject, GlobalContext, Context)) {
+				return false;
+			}
+		}
+	}
+
+	if (!ExportOptions.ExportSkinning) {
+		return true;
+	}
+
+	Context->HasSkin = true;
 
 	Context->SkinObjectName = TSTR(Node->GetName());
 
@@ -966,7 +1073,7 @@ bool MPKFExporter::PrepareKFMeshExportSkinContext2(IGameNode* Node, IGameMesh* M
 			break;
 		}
 		default:
-			SHOW_ERROR(_T("Unknown vertex type only RIGID and RIGI_BLENDED are supported"));
+			SHOW_ERROR(MPKFEXPORTER_ERROR_SKIN_WRONG_VERTEX_TYPE);
 			return false;
 		}
 
@@ -982,7 +1089,7 @@ bool MPKFExporter::PrepareKFMeshExportSkinContext2(IGameNode* Node, IGameMesh* M
 	return true;
 }
 
-bool MPKFExporter::PrepareKFMeshExportSkinContext(IGameNode* Node, IGameMesh* Mesh, IGameObject* GameObject, MPKFGlobalExporterContext* GlobalContext, MPKFMeshExporterContext* Context)
+/*bool MPKFExporter::PrepareKFMeshExportSkinContext(IGameNode* Node, IGameMesh* Mesh, IGameObject* GameObject, MPKFGlobalExporterContext* GlobalContext, MPKFMeshExporterContext* Context)
 {
 	IGameSkin* Skin = GameObject->GetIGameSkin();
 
@@ -1141,7 +1248,7 @@ bool MPKFExporter::PrepareKFMeshExportSkinContext(IGameNode* Node, IGameMesh* Me
 	PhysiqueInterface->ReleaseContextInterface(PhysiqueContext);
 
 	return true;
-}
+}*/
 
 bool MPKFExporter::PrepareKFMeshExportContext(IGameNode* Node, IGameMesh* Mesh, IGameObject* GameObject, MPKFGlobalExporterContext* GlobalContext, MPKFMeshExporterContext* Context)
 {
@@ -1252,8 +1359,64 @@ bool MPKFExporter::PrepareKFMeshExportContext(IGameNode* Node, IGameMesh* Mesh, 
 		Context->MeshIndicesPerPrimitive.push_back(LocalIndices.size());
 	}
 
-	if (!PrepareKFMeshExportSkinContext2(Node, Mesh, GameObject, GlobalContext, Context)) {
+	if (!PrepareKFMeshExportSkinContext(Node, Mesh, GameObject, GlobalContext, Context)) {
 		return false;
+	}
+
+	return true;
+}
+
+
+bool MPKFExporter::DoExportKFAnimation(IGameNode* Node, MPKFMeshExporterContext* Context, MPKFGlobalExporterContext* GlobalContext)
+{
+	for (MPKFAnimationExporterContext& Animation : Context->Animations) {
+
+		std::unique_ptr<MPMemoryChunkWriter> AnimationChunk{ GlobalContext->AnimationMemoryWriter.CreateChunk(0x0C, MPKFTYPE_KEYFRAME_ANIMATION_CHUNK_ID, 5) };
+
+		std::unique_ptr<MPMemoryChunkWriter> AnimationSubChunk{ GlobalContext->AnimationMemoryWriter.CreateChunk(0x0C, MPKFTYPE_ANIMATION_SUB_CHUNK_ID, 0) };
+
+		WRITE_ASCII_STRING(ObjectName, Animation.ObjectName.data(), AnimationSubChunk);
+		*AnimationSubChunk << Animation.SampleRate;
+		*AnimationSubChunk << Animation.LoopWhenFinished;
+
+		*AnimationChunk << AnimationSubChunk.get();
+
+		WRITE_ASCII_STRING(ParentName, Animation.ParentName.data(), AnimationChunk);
+		*AnimationChunk << Animation.LoopInterpolation;
+		*AnimationChunk << Animation.NumTotalKeyFrames;
+		*AnimationChunk << static_cast<uint32_t>(Animation.Frames.size());
+
+		for (const MPKFAnimationFrameExporterContext& Frame : Animation.Frames) {
+			*AnimationChunk << Frame.FrameID;
+
+			Point4 Row1 = Frame.Transform.GetRow(0);
+			Point4 Row2 = Frame.Transform.GetRow(1);
+			Point4 Row3 = Frame.Transform.GetRow(2);
+			Point4 Row4 = Frame.Transform.GetRow(3);
+
+			float Scale = 1.f;
+			if (ExportOptions.Scale) {
+				Scale = ExportOptions.ScaleValue;
+			}
+
+			MPMatrix4x3 NodeMatrix(Row1.x, Row1.y, Row1.z, Row2.x, Row2.y, Row2.z, Row3.x, Row3.y, Row3.z, Row4.x * Scale, Row4.y * Scale, Row4.z * Scale);
+
+			*AnimationChunk << NodeMatrix;
+		}
+
+		//visibility frames
+		*AnimationChunk << static_cast<uint32_t>(1);
+		*AnimationChunk << static_cast<uint32_t>(0);
+		*AnimationChunk << 1.f;
+
+		*AnimationChunk << Animation.LoopToFrame;
+		*AnimationChunk << Animation.FrameToFrameRotationInterpolation;
+		*AnimationChunk << Animation.MaintainMatrixScaling;
+
+		GlobalContext->AnimationMemoryWriter << AnimationChunk.get();
+
+		AnimationSubChunk.reset();
+		AnimationChunk.reset();
 	}
 
 	return true;

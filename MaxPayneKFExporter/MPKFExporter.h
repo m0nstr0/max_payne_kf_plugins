@@ -15,7 +15,6 @@ struct MPKFExporterOptions
 	bool ExportAnimations{ false };
 	bool ExportHelpers{ false };
 	bool ExportEnvironmets{ false };
-	bool ExportSkeleton{ false };
 	bool CopyTexturesToExportPath{ false };
 	bool Scale{ false };
 	float ScaleValue{ 0.01f };
@@ -51,7 +50,6 @@ struct MPKFExporterOptions
 		ExportAnimations = false;
 		ExportHelpers = false;
 		ExportEnvironmets = false;
-		ExportSkeleton = false;
 		CopyTexturesToExportPath = false;
 		Scale = false;
 		ScaleValue = 0.01f;
@@ -136,11 +134,13 @@ private:
 
 	bool BuildSkinBoneTree(class IGameNode* Node, class MPKFMeshExporterContext* Context);
 
-	bool PrepareKFMeshExportSkinContext2(class IGameNode* Node, class IGameMesh* Mesh, class IGameObject* GameObject, class MPKFGlobalExporterContext* GlobalContext, class MPKFMeshExporterContext* Context);
+	bool PrepareKFMeshExportAnimationContext(class IGameNode* Node, class IGameMesh* Mesh, class IGameObject* GameObject, class MPKFGlobalExporterContext* GlobalContext, class MPKFMeshExporterContext* Context);
 
 	bool PrepareKFMeshExportSkinContext(class IGameNode* Node, class IGameMesh* Mesh, class IGameObject* GameObject, class MPKFGlobalExporterContext* GlobalContext, class MPKFMeshExporterContext* Context);
 
 	bool PrepareKFMeshExportContext(class IGameNode* Node, class IGameMesh* Mesh, class IGameObject* GameObject, class MPKFGlobalExporterContext* GlobalContext, class MPKFMeshExporterContext* Context);
+
+	bool DoExportKFAnimation(class IGameNode* Node, class MPKFMeshExporterContext* Context, class MPKFGlobalExporterContext* GlobalContext);
 
 	bool DoExportKFMesh(class IGameNode* Node, class MPKFMeshExporterContext* Context, class MPMemoryChunkWriter* ChunkWriter);
 
