@@ -8,6 +8,8 @@ struct MPVector2
 	float X;
 	float Y;
 
+	MPVector2() : X{ 0.f }, Y{ 0.f } {}
+	
 	MPVector2(float InX, float InY) : X{ InX }, Y{ InY } {}
 };
 
@@ -17,6 +19,8 @@ struct MPVector3
 	float Y;
 	float Z;
 
+	MPVector3() : X{ 0.f }, Y{ 0.f }, Z{ 0.f } {}
+	
 	MPVector3(float InX, float InY, float InZ) : X{ InX }, Y{ InY }, Z{ InZ } {}
 
 	MPVector3(const MPVector3& Other) 
@@ -35,9 +39,13 @@ struct MPVector3
 		return *this;
 	}
 
-	MPVector3 ScaleBy(float Value) const 
+	MPVector3& ScaleBy(float Value) 
 	{
-		return MPVector3(X * Value, Y * Value, Z * Value);
+		X *= Value;
+		Y *= Value;
+		Z *= Value;
+
+		return *this;
 	}
 };
 
@@ -63,6 +71,22 @@ struct MPMatrix4x3
 {
 	float M[4][3];
 
+	MPMatrix4x3()
+	{
+		M[0][0] = 1.f;
+		M[0][1] = 0.f;
+		M[0][2] = 0.f;
+		M[1][0] = 0.f;
+		M[1][1] = 1.f;
+		M[1][2] = 0.f;
+		M[2][0] = 0.f;
+		M[2][1] = 0.f;
+		M[2][2] = 1.f;
+		M[3][0] = 0.f;
+		M[3][1] = 0.f;
+		M[3][2] = 0.f;	
+	}
+	
 	MPMatrix4x3(float M11, float M12, float M13, float M21, float M22, float M23, float M31, float M32, float M33, float M41, float M42, float M43)
 	{
 		M[0][0] = M11;

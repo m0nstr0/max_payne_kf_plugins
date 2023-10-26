@@ -64,3 +64,18 @@ TCHAR* GetString(int id)
         return LoadString(hInstance, id, buf, _countof(buf)) ? buf : NULL;
     return NULL;
 }
+
+bool IsASCII(const MCHAR* Str, size_t Length)
+{
+    size_t StrIndex = 0;
+    while (Str && Str[StrIndex] != '\0') {
+        if (Length > 0 && StrIndex >= Length) {
+            return true;
+        }
+        if (isascii(Str[StrIndex]) == 0) {
+            return false;
+        }
+        StrIndex++;
+    }
+    return true;
+}
